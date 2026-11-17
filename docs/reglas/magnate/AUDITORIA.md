@@ -211,16 +211,21 @@ Fuente: instrucciones de Monopoly (00009) publicadas por Hasbro — https://inst
 
 Sin cambios (iguales en ambas ediciones): Plaza Libre sin premio, alquiler doble con grupo completo, construcción pareja, escasez de edificios con subasta, sin préstamos entre jugadores, venta de edificios a mitad de precio.
 
-### Pendientes (no se inventa el comportamiento; queda el valor anterior)
+### Verificación de los pendientes (validación final)
 
-| Tema | Situación | Qué hace falta |
+Fuente: reglamento oficial 00009, https://www.hasbro.com/common/instruct/00009.pdf (escaneo con errores de OCR). El reglamento no trae el tablero ni las cartas; para eso se usan fuentes secundarias y se marcan como tales.
+
+| Tema | Resultado | Estado |
 |---|---|---|
-| Monto fijo del Impuesto a la Renta | El OCR del escaneo 00009 lee «$900»; el tablero clásico impreso dice $200. Se usa $200. | Foto del tablero 00009 o un PDF legible |
-| Impuesto de lujo | No se pudo leer en el escaneo. Se mantiene $100. | Igual que el anterior |
-| Mazos de Fortuna / Arca Vecinal | Se mantienen los 32 efectos ya implementados; no se verificó que coincidan con 00009. | Lista de cartas 00009 |
-| Servicios por carta (C4/C7) | Tirada nueva; no verificado en 00009. | Texto de la carta en 00009 |
-| Redondeo del 10 % | `Math.round` al dólar (no hay billetes menores). | Aprobación de la adaptación |
-| Reclamo del alquiler | Sigue el cobro automático (decisión C6). | — |
-| Hotel sin 4 casas en la banca | Sigue la decisión D11. | — |
+| Impuesto a la Renta | El reglamento confirma la elección, la definición de patrimonio y que se decide antes de sumar. El «$900» del escaneo es un error de OCR: el tablero de EE. UU. anterior a 2008 dice «Pay 10% or $200» (Monopoly Wiki, Wikipedia). | Confirmado, $200 |
+| Impuesto de lujo | El reglamento no lo menciona. El tablero que acompañaba estas reglas (anterior a septiembre de 2008) cobraba **$75**; $100 es del rediseño de 2008. | **Pendiente de decisión** ($100 hoy) |
+| Fortuna | Los 16 efectos coinciden con el mazo anterior a 2008 (lista de `monop` de BSD). | Sin cambios |
+| Arca Vecinal | 3 diferencias con el mazo anterior a 2008: venta de acciones $45 (hoy $50), noche de ópera $50 de cada jugador (hoy cumpleaños $10 de cada uno), escuela $150 (hoy $50). Hospital $100 ya coincide. | **Pendiente de decisión** |
+| Servicio por carta | Tirada nueva × 10 aunque el dueño tenga un solo servicio; sin dueño se puede comprar; hipotecado no cobra. Coincide con el texto de la carta anterior a 2008. | Confirmado y probado |
+| Redondeo del 10 % | El reglamento no dice nada. Se redondea al dólar más cercano. | **Pendiente de aprobación** |
+| Cárcel, tercer turno | Dobles en cualquiera de los tres turnos; carta en cualquier momento antes de tirar; multa por adelantado sólo en los dos primeros; al tercer fallo paga $50 y avanza; salir con dobles no da otra tirada. | Confirmado y probado |
+| Imagen enviada por el usuario | Resolución demasiado baja para leer importes; el tablero tiene Báltico marrón y un solo importe de impuesto a la renta, o sea, es posterior a 2008. No sirve como fuente de la 00009. | — |
 
-Resultado: **78 pruebas** de Magnate pasando (antes 68), incluidas 60 partidas aleatorias de 2 a 8 jugadores (60/60 terminan) y 20 partidas de 8 jugadores que terminan siempre.
+Pruebas online: `tests/magnate.online.test.js` (dos clientes WebSocket independientes, partida completa, reconexión). Pasa contra el servidor Node y contra el Worker (`BOARDHUB_URL=http://localhost:8799`).
+
+Resultado: **87 pruebas** de motor de Magnate pasando y 1 prueba online de partida completa.

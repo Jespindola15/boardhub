@@ -746,6 +746,109 @@ describe('G. Cárcel', () => {
 
 /* ================================================================== */
 
+describe('00009 G. Cárcel: opciones del tercer turno', () => {
+  const jailed3 = (s) => {
+    const p = P(s, 'p1');
+    p.status = 'in-jail';
+    p.position = 10;
+    p.jailTurns = 2; // ya falló dos veces: este es su tercer turno preso
+  };
+
+  test('tercer turno: no puede pagar la multa por adelantado', () => {
+    const s = newGame(2);
+    jailed3(s);
+    reject(s, ACTIONS.PAY_JAIL_FINE, 'p1');
+  });
+
+  test('tercer turno: puede usar una carta de libertad antes de tirar (el reglamento no la limita)', () => {
+    let s = newGame(2);
+    jailed3(s);
+    P(s, 'p1').jailFreeCards = [{ deck: 'chance', cardId: 'c9' }];
+    s.decks.chance = s.decks.chance.filter((c) => c !== 'c9');
+    s = act(s, ACTIONS.USE_JAIL_CARD, 'p1');
+    assert.equal(P(s, 'p1').status, 'active');
+    assert.equal(P(s, 'p1').money, 1500);
+    assert.equal(s.turn.step, 'roll'); // sale y tira normalmente
+  });
+
+  test('tercer turno: dobles lo liberan sin multa, avanza con esa tirada y no vuelve a tirar', () => {
+    let s = newGame(2);
+    jailed3(s);
+    s = act(s, ACTIONS.ROLL_DICE, 'p1', {}, dice(3, 3)); // 16
+    assert.equal(P(s, 'p1').status, 'active');
+    assert.equal(P(s, 'p1').position, 16);
+    assert.equal(P(s, 'p1').money, 1500);
+    s = act(s, ACTIONS.DECLINE_PROPERTY, 'p1');
+    for (const id of ['p1', 'p2']) s = act(s, ACTIONS.PASS_BID, id);
+    assert.equal(s.turn.step, 'end');
+  });
+
+  test('primer y segundo turno: puede pagar la multa antes de tirar', () => {
+    for (const turns of [0, 1]) {
+      let s = newGame(2);
+      jailed3(s);
+      P(s, 'p1').jailTurns = turns;
+      s = act(s, ACTIONS.PAY_JAIL_FINE, 'p1');
+      assert.equal(P(s, 'p1').money, 1450);
+      assert.equal(s.turn.step, 'roll');
+    }
+  });
+
+  test('no se puede pagar la multa después de tirar en el mismo turno', () => {
+    let s = newGame(2);
+    jailed3(s);
+    P(s, 'p1').jailTurns = 0;
+    s = act(s, ACTIONS.ROLL_DICE, 'p1', {}, dice(1, 2));
+    assert.equal(P(s, 'p1').status, 'in-jail');
+    reject(s, ACTIONS.PAY_JAIL_FINE, 'p1');
+  });
+});
+
+describe('00009 Cartas que envían a un servicio o estación', () => {
+  test('servicio con UN solo servicio del dueño: igual se paga 10× una tirada nueva (no la que movió)', () => {
+    let s = newGame(2);
+    own(s, 28, 'p2'); // servicio 28; p1 en 22 → el más cercano es 28
+    s.players[0].position = 15;
+    s.decks.chance = ['c7', ...s.decks.chance.filter((c) => c !== 'c7')];
+    s = act(s, ACTIONS.ROLL_DICE, 'p1', {}, dice(3, 4, 6, 6)); // 7 → 22 (Fortuna) → 28; nueva tirada 12
+    assert.equal(P(s, 'p1').position, 28);
+    assert.equal(P(s, 'p1').money, 1500 - 120);
+    assert.equal(P(s, 'p2').money, 1500 + 120);
+  });
+
+  test('servicio sin dueño: se ofrece comprarlo (o subastarlo)', () => {
+    let s = newGame(2);
+    s.players[0].position = 4;
+    s.decks.chance = ['c7', ...s.decks.chance.filter((c) => c !== 'c7')];
+    s = act(s, ACTIONS.ROLL_DICE, 'p1', {}, dice(1, 2));
+    assert.equal(P(s, 'p1').position, 12);
+    assert.equal(s.turn.step, 'buy');
+    s = act(s, ACTIONS.BUY_PROPERTY, 'p1');
+    assert.equal(s.ownership[12].ownerId, 'p1');
+  });
+
+  test('servicio hipotecado: no se cobra nada', () => {
+    let s = newGame(2);
+    own(s, 12, 'p2', 0, true);
+    s.players[0].position = 4;
+    s.decks.chance = ['c7', ...s.decks.chance.filter((c) => c !== 'c7')];
+    s = act(s, ACTIONS.ROLL_DICE, 'p1', {}, dice(1, 2, 6, 6));
+    assert.equal(P(s, 'p1').money, 1500);
+  });
+});
+
+describe('00009 Impuestos: adaptación de redondeo (pendiente de aprobación)', () => {
+  test('el 10 % se redondea al dólar más cercano (213,4 → 213; 213,5 → 214)', () => {
+    for (const [cash, expected] of [[2134, 213], [2135, 214]]) {
+      let s = newGame(2);
+      s = act(s, ACTIONS.ROLL_DICE, 'p1', {}, dice(1, 3));
+      P(s, 'p1').money = cash;
+      s = act(s, ACTIONS.PAY_INCOME_TAX, 'p1', { mode: 'percent' });
+      assert.equal(P(s, 'p1').money, cash - expected);
+    }
+  });
+});
+
 describe('H. Negociaciones', () => {
   test('H1 cualquier jugador negocia en cualquier momento y la oferta no detiene el turno', () => {
     let s = newGame(3);
