@@ -1,5 +1,6 @@
 /**
- * Tests del motor de Magnate frente al reglamento Hasbro G0009.
+ * Tests del motor de Magnate frente al reglamento Hasbro 00009 (reglas clásicas, sin Speed Die).
+ * Las pruebas "00009 …" cubren las diferencias con la edición G0009 que se usaba antes.
  * Los identificadores (A2, B4, …) remiten a docs/reglas/magnate/AUDITORIA.md.
  * Ejecutar: npm test
  */
@@ -16,6 +17,7 @@ import {
   mortgageBlocker,
   unmortgageBlocker,
   legalPlacements,
+  definition,
 } from '../src/games/magnate/engine/index.js';
 import { createGameState, BANK_HOUSES, BANK_HOTELS, HOTEL } from '../src/games/magnate/state/gameState.js';
 import { BOARD, isOwnable } from '../src/games/magnate/data/board.js';
@@ -100,9 +102,11 @@ describe('A. Preparación y turno', () => {
 
   test('A5/A6 dobles dan otra tirada; con tres dobles se va a la cárcel sin mover', () => {
     let s = newGame();
-    s = act(s, ACTIONS.ROLL_DICE, 'p1', {}, dice(2, 2)); // 4
+    s = act(s, ACTIONS.ROLL_DICE, 'p1', {}, dice(3, 3)); // 6
+    s = act(s, ACTIONS.DECLINE_PROPERTY, 'p1');
+    for (const id of ['p1', 'p2', 'p3']) s = act(s, ACTIONS.PASS_BID, id);
     assert.equal(s.turn.step, 'roll');
-    s = act(s, ACTIONS.ROLL_DICE, 'p1', {}, dice(3, 3)); // 10
+    s = act(s, ACTIONS.ROLL_DICE, 'p1', {}, dice(2, 2)); // 10, sólo de visita
     assert.equal(s.turn.step, 'roll');
     s = act(s, ACTIONS.ROLL_DICE, 'p1', {}, dice(1, 1));
     assert.equal(P(s, 'p1').status, 'in-jail');
@@ -127,14 +131,41 @@ describe('A. Preparación y turno', () => {
     assert.equal(P(s, 'p1').money, 1500);
   });
 
-  test('A9 impuestos: $200 y $100 a la banca', () => {
-    let s = newGame();
-    s = act(s, ACTIONS.ROLL_DICE, 'p1', {}, dice(1, 3));
-    assert.equal(P(s, 'p1').money, 1300);
+  test('A9 impuestos: el de lujo se paga directo ($100)', () => {
     let t = newGame();
     t.players[0].position = 36;
     t = act(t, ACTIONS.ROLL_DICE, 'p1', {}, dice(1, 1));
     assert.equal(P(t, 'p1').money, 1400);
+  });
+
+  test('00009 A9 Impuesto a la Renta: elegir $200 o el 10 % del patrimonio, antes de calcularlo', () => {
+    let s = newGame();
+    s = act(s, ACTIONS.ROLL_DICE, 'p1', {}, dice(1, 3)); // casilla 4
+    assert.deepEqual(getPendingDeciders(s), ['p1']);
+    reject(s, ACTIONS.END_TURN, 'p1');
+    reject(s, ACTIONS.PAY_INCOME_TAX, 'p2', { mode: 'flat' });
+    reject(s, ACTIONS.PAY_INCOME_TAX, 'p1', { mode: 'otro' });
+    const flat = act(s, ACTIONS.PAY_INCOME_TAX, 'p1', { mode: 'flat' });
+    assert.equal(P(flat, 'p1').money, 1300);
+    assert.equal(flat.turn.step, 'end');
+    // 10 %: efectivo 1500 + precio impreso de las propiedades (hipotecadas también) + edificios
+    own(s, 1, 'p1', 2); // $60 + 2 casas × $50
+    own(s, 3, 'p1', 2); // $60 + 2 casas × $50
+    own(s, 39, 'p1', 0, true); // $400 aunque esté hipotecada
+    own(s, 37, 'p2', HOTEL);
+    const pct = act(s, ACTIONS.PAY_INCOME_TAX, 'p1', { mode: 'percent' });
+    // 1500 + 60 + 100 + 60 + 100 + 400 = 2220 → $222
+    assert.equal(P(pct, 'p1').money, 1500 - 222);
+  });
+
+  test('00009 A9 el 10 % cuenta un hotel como 5 edificios', () => {
+    let s = newGame();
+    s = act(s, ACTIONS.ROLL_DICE, 'p1', {}, dice(1, 3));
+    P(s, 'p1').money = 1000;
+    own(s, 39, 'p1', HOTEL); // $400 + 5 × $200
+    own(s, 37, 'p1', HOTEL); // $350 + 5 × $200
+    s = act(s, ACTIONS.PAY_INCOME_TAX, 'p1', { mode: 'percent' });
+    assert.equal(P(s, 'p1').money, 1000 - 375); // (1000 + 400 + 1000 + 350 + 1000) × 10 %
   });
 
   test('A10 admite de 2 a 8 jugadores', () => {
@@ -163,10 +194,12 @@ describe('B. Compra y subastas', () => {
     assert.deepEqual(getPendingDeciders(s).sort(), ['p1', 'p2', 'p3']);
   });
 
-  test('B3 la primera puja debe ser de al menos $10', () => {
+  test('00009 B3 la puja puede empezar en cualquier monto ($1)', () => {
     const s = toAuction();
-    reject(s, ACTIONS.PLACE_BID, 'p2', { amount: 9 });
-    act(s, ACTIONS.PLACE_BID, 'p2', { amount: 10 });
+    reject(s, ACTIONS.PLACE_BID, 'p2', { amount: 0 });
+    const t = act(s, ACTIONS.PLACE_BID, 'p2', { amount: 1 });
+    reject(t, ACTIONS.PLACE_BID, 'p3', { amount: 1 }); // hay que superar la mejor puja
+    act(t, ACTIONS.PLACE_BID, 'p3', { amount: 2 });
   });
 
   test('B4 subasta abierta: se puja sin orden y quien no subió puede volver a pujar', () => {
@@ -330,7 +363,7 @@ describe('D. Construcción', () => {
     assert.equal(s.bank.hotels, BANK_HOTELS - 1);
     assert.equal(s.bank.houses, BANK_HOUSES - 4);
     reject(s, ACTIONS.BUILD, 'p1', { index: 3 }); // un hotel por calle
-    s = act(s, ACTIONS.ROLL_DICE, 'p1', {}, dice(1, 3));
+    s = act(s, ACTIONS.ROLL_DICE, 'p1', {}, dice(4, 6)); // cárcel, sólo de visita
     s = act(s, ACTIONS.END_TURN, 'p1');
     const m = P(s, 'p2').money;
     s = act(s, ACTIONS.ROLL_DICE, 'p2', {}, dice(1, 2));
@@ -365,7 +398,7 @@ describe('D. Construcción', () => {
     reject(s, ACTIONS.BUILD, 'p1', { index: 1 });
   });
 
-  test('D8 escasez: dos interesados en la última casa → subasta desde $10', () => {
+  test('D8 escasez: dos interesados en la última casa → subasta al mejor postor', () => {
     let s = newGame(2);
     browns(s, 'p1');
     own(s, 37, 'p2');
@@ -377,7 +410,7 @@ describe('D. Construcción', () => {
     reject(s, ACTIONS.ROLL_DICE, 'p1', {}, dice(1, 2)); // bloquea el turno
     s = act(s, ACTIONS.CLAIM_BUILDING, 'p2', { want: true });
     assert.equal(s.auction.kind, 'building');
-    reject(s, ACTIONS.PLACE_BID, 'p1', { amount: 5 });
+    reject(s, ACTIONS.PLACE_BID, 'p1', { amount: 0 });
     s = act(s, ACTIONS.PLACE_BID, 'p1', { amount: 10 });
     s = act(s, ACTIONS.PLACE_BID, 'p2', { amount: 15 });
     s = act(s, ACTIONS.PASS_BID, 'p1');
@@ -459,16 +492,44 @@ describe('E. Hipotecas', () => {
     act(s, ACTIONS.MORTGAGE, 'p2', { index: 39 });
   });
 
-  test('E5/H4 negociar una propiedad hipotecada no tiene recargo; se levanta por el coste de la ficha', () => {
+  test('00009 E5/H4 quien recibe una hipotecada en un trato paga el 10 % ya, y al levantarla después paga otra vez hipoteca + 10 %', () => {
     let s = newGame(2);
     own(s, 39, 'p1', 0, true);
     s = act(s, ACTIONS.PROPOSE_TRADE, 'p1', { toId: 'p2', give: { squares: [39] }, get: { money: 100 } });
     s = act(s, ACTIONS.RESPOND_TRADE, 'p2', { tradeId: s.trades[0].id, accept: true });
     assert.equal(s.ownership[39].ownerId, 'p2');
+    assert.deepEqual(getPendingDeciders(s), ['p2']);
+    reject(s, ACTIONS.ROLL_DICE, 'p1', {}, dice(1, 2)); // el turno espera la decisión
+    s = act(s, ACTIONS.RESOLVE_MORTGAGE_TRANSFER, 'p2', { index: 39, lift: false });
+    assert.equal(P(s, 'p2').money, 1400 - 20); // 10 % de la hipoteca de $200
     assert.equal(s.ownership[39].mortgaged, true);
-    assert.equal(P(s, 'p2').money, 1400);
-    s = act(s, ACTIONS.UNMORTGAGE, 'p2', { index: 39 }); // fuera de su turno
-    assert.equal(P(s, 'p2').money, 1180);
+    s = act(s, ACTIONS.UNMORTGAGE, 'p2', { index: 39 });
+    assert.equal(P(s, 'p2').money, 1380 - 220); // hipoteca + 10 % otra vez
+  });
+
+  test('00009 E5/H4 o la levanta en el acto pagando hipoteca + 10 %', () => {
+    let s = newGame(2);
+    own(s, 39, 'p1', 0, true);
+    s = act(s, ACTIONS.PROPOSE_TRADE, 'p1', { toId: 'p2', give: { squares: [39] }, get: {} });
+    s = act(s, ACTIONS.RESPOND_TRADE, 'p2', { tradeId: s.trades[0].id, accept: true });
+    reject(s, ACTIONS.RESOLVE_MORTGAGE_TRANSFER, 'p1', { index: 39, lift: true }); // sólo quien la recibió
+    s = act(s, ACTIONS.RESOLVE_MORTGAGE_TRANSFER, 'p2', { index: 39, lift: true });
+    assert.equal(P(s, 'p2').money, 1500 - 220);
+    assert.equal(s.ownership[39].mortgaged, false);
+    assert.equal(s.mortgageTransfers.length, 0);
+  });
+
+  test('00009 E5 sin efectivo para el 10 % queda una deuda con la banca', () => {
+    let s = newGame(2);
+    own(s, 39, 'p1', 0, true);
+    own(s, 37, 'p2');
+    P(s, 'p2').money = 5;
+    s = act(s, ACTIONS.PROPOSE_TRADE, 'p1', { toId: 'p2', give: { squares: [39] }, get: {} });
+    s = act(s, ACTIONS.RESPOND_TRADE, 'p2', { tradeId: s.trades[0].id, accept: true });
+    reject(s, ACTIONS.RESOLVE_MORTGAGE_TRANSFER, 'p2', { index: 39, lift: true });
+    s = act(s, ACTIONS.RESOLVE_MORTGAGE_TRANSFER, 'p2', { index: 39, lift: false });
+    assert.equal(s.debts[0].amount, 20);
+    assert.equal(s.debts[0].creditorId, null);
   });
 });
 
@@ -523,31 +584,38 @@ describe('F. Deudas y bancarrota', () => {
     assert.ok(unmortgageBlocker(s, 'p1', 37));
   });
 
-  test('F4 bancarrota ante un jugador durante un alquiler: liquida todo y transfiere sin recargo', () => {
+  test('00009 F4 bancarrota ante un jugador: edificios a la banca por la mitad, propiedades tal como están y 10 % por cada hipotecada', () => {
     let s = newGame(3);
     own(s, 39, 'p2', HOTEL);
     own(s, 37, 'p2', HOTEL);
     s.bank.hotels -= 2;
     own(s, 1, 'p1', 1);
     own(s, 3, 'p1', 1);
-    own(s, 5, 'p1');
+    own(s, 5, 'p1', 0, true); // ya hipotecada
     s.bank.houses -= 2;
     s.players[0].jailFreeCards = [{ deck: 'chance', cardId: 'c9' }];
     s.decks.chance = s.decks.chance.filter((c) => c !== 'c9');
     s.players[0].position = 35;
     s.players[0].money = 300;
-    s = act(s, ACTIONS.ROLL_DICE, 'p1', {}, dice(1, 3)); // 2000
+    s = act(s, ACTIONS.ROLL_DICE, 'p1', {}, dice(1, 3)); // alquiler de hotel: 2000
     assert.equal(getActingPlayerId(s), 'p1');
     s = act(s, ACTIONS.DECLARE_BANKRUPTCY, 'p1');
-    // 300 + casas 2×25 + hipotecas 30 + 30 + 100 = 510
-    assert.equal(P(s, 'p2').money, 1500 + 510);
+    // 300 + casas 2 × $25 = 350 en efectivo; no se hipoteca nada al quebrar
+    assert.equal(P(s, 'p2').money, 1500 + 350);
+    assert.equal(s.ownership[1].mortgaged, false);
+    assert.equal(s.ownership[3].mortgaged, false);
     for (const i of [1, 3, 5]) {
       assert.equal(s.ownership[i].ownerId, 'p2');
-      assert.equal(s.ownership[i].mortgaged, true);
       assert.equal(s.ownership[i].houses, 0);
     }
     assert.equal(s.bank.houses, BANK_HOUSES);
     assert.equal(P(s, 'p2').jailFreeCards.length, 1);
+    // La Estación hipotecada: el acreedor decide en el acto (bloquea el turno hasta resolverlo).
+    assert.deepEqual(getPendingDeciders(s), ['p2']);
+    reject(s, ACTIONS.ROLL_DICE, 'p2', {}, dice(1, 2));
+    s = act(s, ACTIONS.RESOLVE_MORTGAGE_TRANSFER, 'p2', { index: 5, lift: false });
+    assert.equal(P(s, 'p2').money, 1850 - 10); // 10 % de $100
+    assert.equal(s.ownership[5].mortgaged, true);
     assert.equal(s.turn.playerId, 'p2');
   });
 
@@ -607,6 +675,16 @@ describe('G. Cárcel', () => {
     assert.equal(P(s, 'p1').money, 1450);
     s = act(s, ACTIONS.ROLL_DICE, 'p1', {}, dice(1, 2));
     assert.equal(P(s, 'p1').position, 13);
+  });
+
+  test('00009 G2 la multa se paga antes de tirar sólo en los dos turnos siguientes; en el tercero hay que tirar', () => {
+    let s = newGame(2);
+    jailed(s);
+    P(s, 'p1').jailTurns = 1;
+    act(s, ACTIONS.PAY_JAIL_FINE, 'p1');
+    P(s, 'p1').jailTurns = 2;
+    reject(s, ACTIONS.PAY_JAIL_FINE, 'p1');
+    act(s, ACTIONS.ROLL_DICE, 'p1', {}, dice(1, 2)); // tercer intento: se tira
   });
 
   test('G3 carta de libertad comprada a otro jugador', () => {
@@ -771,6 +849,8 @@ describe('I. Cartas', () => {
     s.decks.chance = ['c10', ...s.decks.chance.filter((c) => c !== 'c10')];
     s = act(s, ACTIONS.ROLL_DICE, 'p1', {}, dice(1, 2)); // 7 → 4 (impuesto)
     assert.equal(P(s, 'p1').position, 4);
+    assert.deepEqual(s.incomeTax, { playerId: 'p1', index: 4 });
+    s = act(s, ACTIONS.PAY_INCOME_TAX, 'p1', { mode: 'flat' });
     assert.equal(P(s, 'p1').money, 1300);
   });
 });
@@ -791,10 +871,15 @@ function chooseAction(s, rng) {
     for (const sq of BOARD) if (!mortgageBlocker(s, id, sq.index)) return { playerId: id, type: ACTIONS.MORTGAGE, payload: { index: sq.index } };
     return { playerId: id, type: ACTIONS.DECLARE_BANKRUPTCY };
   }
+  if (s.incomeTax) return { playerId: id, type: ACTIONS.PAY_INCOME_TAX, payload: { mode: rng() < 0.5 ? 'flat' : 'percent' } };
+  if (s.mortgageTransfers?.length) {
+    const t = s.mortgageTransfers.find((x) => x.playerId === id);
+    return { playerId: id, type: ACTIONS.RESOLVE_MORTGAGE_TRANSFER, payload: { index: t.index, lift: p.money > 600 && rng() < 0.5 } };
+  }
   if (s.placement) return { playerId: id, type: ACTIONS.PLACE_BUILDING, payload: { index: legalPlacements(s, id, s.placement.buildingType)[0] } };
   if (s.buildingClaim) return { playerId: id, type: ACTIONS.CLAIM_BUILDING, payload: { want: rng() < 0.5 } };
   if (s.auction) {
-    const bid = Math.max(10, s.auction.highBid + 1 + Math.floor(rng() * 30));
+    const bid = Math.max(1, s.auction.highBid + 1 + Math.floor(rng() * 30));
     return bid <= p.money && rng() < 0.45 ? { playerId: id, type: ACTIONS.PLACE_BID, payload: { amount: bid } } : { playerId: id, type: ACTIONS.PASS_BID };
   }
   // Acciones libres de cualquier jugador, a veces
@@ -822,7 +907,7 @@ function chooseAction(s, rng) {
   const cur = P(s, s.turn.playerId);
   if (s.turn.step === 'buy') return { playerId: cur.id, type: rng() < 0.9 && cur.money >= BOARD[s.pendingPurchase].price ? ACTIONS.BUY_PROPERTY : ACTIONS.DECLINE_PROPERTY };
   if (s.turn.step === 'roll') {
-    if (cur.status === 'in-jail' && cur.money > 200 && rng() < 0.5) return { playerId: cur.id, type: ACTIONS.PAY_JAIL_FINE };
+    if (cur.status === 'in-jail' && cur.jailTurns < 2 && cur.money > 200 && rng() < 0.5) return { playerId: cur.id, type: ACTIONS.PAY_JAIL_FINE };
     return { playerId: cur.id, type: ACTIONS.ROLL_DICE };
   }
   return { playerId: cur.id, type: ACTIONS.END_TURN };
@@ -877,6 +962,20 @@ describe('J. Integridad', () => {
     }
     assert.ok(finished >= 30, `sólo terminaron ${finished} de 60 partidas`);
     console.log(`  partidas aleatorias terminadas: ${finished}/60`);
+  });
+
+  test('00009 J1 20 partidas de 8 jugadores terminan siempre', () => {
+    for (let g = 0; g < 20; g++) {
+      const rng = seeded(5000 + g);
+      let s = createGameState({ players: mkPlayers(8), rng });
+      let step = 0;
+      for (; step < 30000 && s.phase === 'playing'; step++) {
+        const r = applyAction(s, chooseAction(s, rng), rng);
+        if (r.ok) s = r.state;
+        checkInvariants(s);
+      }
+      assert.equal(s.phase, 'finished', `la partida ${g} no terminó en ${step} pasos`);
+    }
   });
 
   test('J1 el motor rechaza acciones ilegales enviadas por cualquier jugador sin alterar el estado', () => {
@@ -947,6 +1046,12 @@ describe('Reglas de la casa', () => {
     let s = newGame(2);
     s = act(s, ACTIONS.ROLL_DICE, 'p1', {}, dice(2, 3));
     reject(s, ACTIONS.SKIP_PROPERTY, 'p1');
+  });
+
+  test('00009 skipPurchase viene apagada por defecto (motor y opciones de sala)', () => {
+    assert.equal(newGame().options.skipPurchase, false);
+    assert.deepEqual(definition.validateOptions({}), { skipPurchase: false });
+    assert.deepEqual(definition.validateOptions(undefined), { skipPurchase: false });
   });
 
   test('skipPurchase activada: se puede pasar y la propiedad sigue en la banca', () => {

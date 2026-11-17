@@ -21,7 +21,7 @@ export function ClaimPanel({ state, send }) {
           {requester.name} quiere {label(c.buildingType)} y quedan {stock} en la banca
         </strong>
       </div>
-      <p className="ctx-card__text">Si más jugadores lo quieren de los que hay, se subasta (desde $10).</p>
+      <p className="ctx-card__text">Si más jugadores lo quieren de los que hay, se subasta al mejor postor.</p>
       <ul className="auction__rows">
         {c.eligible.map((id) => {
           const p = getPlayer(state, id);

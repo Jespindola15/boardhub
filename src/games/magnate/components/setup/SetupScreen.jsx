@@ -12,7 +12,7 @@ const makeSeat = (i) => ({ id: `p${i + 1}`, name: DEFAULT_NAMES[i], colorId: PLA
 /** Configuración de una partida local: 2–8 jugadores en la misma PC. */
 export default function SetupScreen({ onStart }) {
   const [seats, setSeats] = useState(() => [0, 1, 2, 3].map(makeSeat));
-  const [skipPurchase, setSkipPurchase] = useState(true);
+  const [skipPurchase, setSkipPurchase] = useState(false); // regla de la casa: apagada por defecto
 
   const update = (i, patch) => setSeats((s) => s.map((seat, j) => (j === i ? { ...seat, ...patch } : seat)));
 

@@ -188,3 +188,39 @@ Decisiones tomadas: **C4** tirada nueva · **C6** cobro automático · **D11** n
 | J3 orden de los mazos visible | **pendiente** para la fase de vistas privadas (arquitectura) | — |
 
 Resultado: **68 pruebas** de Magnate pasando, incluidas 60 partidas aleatorias completas de 2 a 8 jugadores (56 terminan con un ganador dentro del límite de acciones y todas respetan los invariantes de dinero, edificios y cartas).
+
+---
+
+## Fase 1 — Cambio de edición de referencia a 00009
+
+Decisión del usuario: usar la **edición clásica Hasbro 00009** (reglas sin Speed Die, © 2004, 2007) en lugar de G0009 (2025), y desactivar por defecto toda opción que permita saltarse una compra sin subasta. El tablero y su diseño no cambian.
+
+Fuente: instrucciones de Monopoly (00009) publicadas por Hasbro — https://instructions.hasbro.com/en-sg/instruction/monopoly-game (PDF escaneado; se lee con OCR y en algunos importes el texto es dudoso).
+
+### Reglas corregidas
+
+| Código | G0009 (antes) | 00009 (ahora) | Dónde | Prueba |
+|---|---|---|---|---|
+| A9 | Impuesto a la Renta fijo de $200 | Elegir $200 **o** el 10 % del patrimonio total, antes de calcularlo | `resolveLanding`, `PAY_INCOME_TAX`, `totalWorth`, `TaxPanels.jsx` | `00009 A9 …` (2) |
+| B3 | Puja inicial mínima de $10 | La puja empieza en cualquier monto (mínimo $1) | `AUCTION_MIN_BID` | `00009 B3 …` |
+| E5/H4 | Recibir una hipotecada no tenía recargo | Quien la recibe la levanta ya (hipoteca + 10 %) o paga el 10 % ya; si la levanta después, vuelve a pagar hipoteca + 10 % | `addMortgageTransfer`, `RESOLVE_MORTGAGE_TRANSFER`, `TaxPanels.jsx` | `00009 E5/H4 …` (3) |
+| F4 | Al quebrar se hipotecaba todo y se traspasaba hipotecado | Los edificios vuelven a la banca por la mitad; las propiedades pasan tal como están; las hipotecadas siguen la regla E5 | `sellAllBuildings`, `bankrupt` | `00009 F4 …` |
+| G2 | Multa de cárcel antes de tirar en cualquier turno preso | Sólo en los dos turnos siguientes; en el tercero hay que tirar (y pagar si falla) | `JAIL_PREPAY_TURNS` | `00009 G2 …` |
+| A10 | 8 jugadores como desviación | 00009 admite 2–8: deja de ser desviación | `RulesModal.jsx`, especificación | `A10` |
+| Regla de la casa | `skipPurchase` activada por defecto | **Desactivada** por defecto | `SetupScreen.jsx`, `DEFAULT_OPTIONS` | `00009 skipPurchase …` |
+
+Sin cambios (iguales en ambas ediciones): Plaza Libre sin premio, alquiler doble con grupo completo, construcción pareja, escasez de edificios con subasta, sin préstamos entre jugadores, venta de edificios a mitad de precio.
+
+### Pendientes (no se inventa el comportamiento; queda el valor anterior)
+
+| Tema | Situación | Qué hace falta |
+|---|---|---|
+| Monto fijo del Impuesto a la Renta | El OCR del escaneo 00009 lee «$900»; el tablero clásico impreso dice $200. Se usa $200. | Foto del tablero 00009 o un PDF legible |
+| Impuesto de lujo | No se pudo leer en el escaneo. Se mantiene $100. | Igual que el anterior |
+| Mazos de Fortuna / Arca Vecinal | Se mantienen los 32 efectos ya implementados; no se verificó que coincidan con 00009. | Lista de cartas 00009 |
+| Servicios por carta (C4/C7) | Tirada nueva; no verificado en 00009. | Texto de la carta en 00009 |
+| Redondeo del 10 % | `Math.round` al dólar (no hay billetes menores). | Aprobación de la adaptación |
+| Reclamo del alquiler | Sigue el cobro automático (decisión C6). | — |
+| Hotel sin 4 casas en la banca | Sigue la decisión D11. | — |
+
+Resultado: **78 pruebas** de Magnate pasando (antes 68), incluidas 60 partidas aleatorias de 2 a 8 jugadores (60/60 terminan) y 20 partidas de 8 jugadores que terminan siempre.

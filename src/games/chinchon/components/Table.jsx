@@ -82,7 +82,7 @@ export default function ChinchonTable({ view, send, onNextRound, nextRoundLabel 
               </div>
               <div className="ch-fan">
                 {Array.from({ length: Math.min(p.handCount, 8) }, (_, i) => (
-                  <SpanishCard key={i} back size="sm" style={{ marginLeft: i ? -34 : 0 }} />
+                  <SpanishCard skin="clasica" key={i} back size="sm" style={{ marginLeft: i ? -34 : 0 }} />
                 ))}
               </div>
             </div>
@@ -91,7 +91,7 @@ export default function ChinchonTable({ view, send, onNextRound, nextRoundLabel 
 
         <div className="ch-center">
           <button type="button" className="ch-pile" disabled={!canDraw} onClick={() => send('DRAW', { from: 'deck' })} title="Robar del mazo">
-            <SpanishCard back size="lg" />
+            <SpanishCard skin="clasica" back size="lg" />
             <span className="ch-pile__count">{view.deckCount}</span>
             <span className="ch-pile__label">Mazo</span>
           </button>
@@ -104,7 +104,7 @@ export default function ChinchonTable({ view, send, onNextRound, nextRoundLabel 
             onDrop={() => drag && discard?.cardIds.includes(drag) && send('DISCARD', { cardId: drag })}
             title={canDraw ? 'Levantar del pozo' : 'Tirar la carta elegida'}
           >
-            {view.discardTop ? <SpanishCard key={view.discardTop.id} card={view.discardTop} size="lg" className="ch-drop-in" /> : <span className="ch-empty">Pozo vacío</span>}
+            {view.discardTop ? <SpanishCard skin="clasica" key={view.discardTop.id} card={view.discardTop} size="lg" className="ch-drop-in" /> : <span className="ch-empty">Pozo vacío</span>}
             <span className="ch-pile__label">Pozo</span>
           </button>
           <div className="ch-info">
@@ -140,7 +140,7 @@ export default function ChinchonTable({ view, send, onNextRound, nextRoundLabel 
                     onDrop={() => onDropCard(id)}
                     onDragEnd={() => setDrag(null)}
                   >
-                    <SpanishCard
+                    <SpanishCard skin="clasica"
                       card={c}
                       size="md"
                       selected={selected === id}
@@ -256,21 +256,21 @@ function RoundOver({ view, send }) {
                     {r.melds.map((m, i) => (
                       <span key={i} className="ch-round__meld">
                         {m.cards.map((c) => (
-                          <SpanishCard key={c.id} card={c} size="sm" />
+                          <SpanishCard skin="clasica" key={c.id} card={c} size="sm" />
                         ))}
                       </span>
                     ))}
                     {r.layOffs?.length > 0 && (
                       <span className="ch-round__meld is-layoff" title="Cartas acomodadas en juegos ajenos">
                         {r.layOffs.map((l) => (
-                          <SpanishCard key={l.card.id} card={l.card} size="sm" />
+                          <SpanishCard skin="clasica" key={l.card.id} card={l.card} size="sm" />
                         ))}
                       </span>
                     )}
                     {r.leftover.length > 0 && (
                       <span className="ch-round__meld is-loose">
                         {r.leftover.map((c) => (
-                          <SpanishCard key={c.id} card={c} size="sm" />
+                          <SpanishCard skin="clasica" key={c.id} card={c} size="sm" />
                         ))}
                       </span>
                     )}

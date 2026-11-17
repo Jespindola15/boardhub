@@ -63,7 +63,15 @@ export default function SquareDetail({ state, index, send }) {
         {square.type === SQUARE_TYPES.UTILITY && <UtilityBody square={square} />}
         {square.type === SQUARE_TYPES.TAX && (
           <p className="deed__text">
-            Al caer aquí pagas <strong>{formatMoney(square.amount)}</strong> a la banca.
+            {square.percent ? (
+              <>
+                Al caer aquí eliges pagar <strong>{formatMoney(square.amount)}</strong> o el <strong>{square.percent} %</strong> de tu patrimonio, antes de calcularlo.
+              </>
+            ) : (
+              <>
+                Al caer aquí pagas <strong>{formatMoney(square.amount)}</strong> a la banca.
+              </>
+            )}
           </p>
         )}
         {DESCRIPTIONS[square.type] && <p className="deed__text">{DESCRIPTIONS[square.type]}</p>}

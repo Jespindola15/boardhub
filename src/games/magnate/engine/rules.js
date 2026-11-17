@@ -1,16 +1,43 @@
 /**
  * Cálculos de reglas sin efectos secundarios (alquileres, construcción, hipotecas, liquidación).
- * Edición de referencia: Hasbro G0009. JS puro.
+ * Edición de referencia: Hasbro 00009, reglas clásicas sin Speed Die (© 2004, 2007). JS puro.
  */
 import { BOARD, SQUARE_TYPES, getSquaresByGroup, isOwnable } from '../data/board.js';
 import { HOTEL } from '../state/gameState.js';
 
 export const JAIL_FINE = 50;
 export const MAX_JAIL_TURNS = 3;
-export const AUCTION_MIN_BID = 10; // BUILDINGS / THE BOARD SPACES: "las pujas empiezan en $10"
+// 00009 BUYING PROPERTY: "la puja puede empezar en cualquier precio" → mínimo $1 (no hay billetes menores).
+export const AUCTION_MIN_BID = 1;
+// 00009 INCOME TAX: monto fijo o 10 % del patrimonio total, elegido antes de calcularlo.
+export const INCOME_TAX_PERCENT = 10;
+// 00009 JAIL: la multa se puede pagar antes de tirar en cualquiera de los DOS turnos siguientes.
+export const JAIL_PREPAY_TURNS = 2;
 export const HOUSES_PER_HOTEL = 4;
 
 export const unmortgageCost = (square) => square.unmortgage;
+
+/** 10 % de interés de la hipoteca (lo que la ficha suma al levantarla). */
+export const mortgageInterest = (square) => square.unmortgage - square.mortgage;
+
+/**
+ * Patrimonio total para el Impuesto a la Renta (00009): efectivo + precio impreso de todas las
+ * propiedades (hipotecadas o no) + costo de todos los edificios (un hotel = 5 edificios).
+ */
+export function totalWorth(state, playerId) {
+  const p = findPlayer(state, playerId);
+  let worth = p.money;
+  for (const sq of BOARD) {
+    const own = state.ownership[sq.index];
+    if (own?.ownerId !== playerId) continue;
+    worth += sq.price;
+    if (own.houses) worth += (own.houses === HOTEL ? 5 : own.houses) * sq.houseCost;
+  }
+  return worth;
+}
+
+/** 10 % del patrimonio, redondeado al dólar más cercano (el reglamento no dice cómo redondear). */
+export const incomeTaxPercentAmount = (state, playerId) => Math.round((totalWorth(state, playerId) * INCOME_TAX_PERCENT) / 100);
 
 export const ownerOf = (state, index) => state.ownership[index]?.ownerId ?? null;
 

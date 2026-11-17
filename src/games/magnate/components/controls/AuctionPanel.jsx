@@ -9,7 +9,7 @@ import { formatMoney } from '../format.js';
 import { useSeat } from '../seat.js';
 
 /**
- * Subasta abierta (G0009): sin orden de turno, desde $10, subiendo al menos $1.
+ * Subasta abierta (00009): sin orden de turno; la puja puede empezar en cualquier monto ($1 o más).
  * Termina cuando todos menos el mejor postor dicen que no suben.
  * En la misma PC, cada fila es un participante.
  */

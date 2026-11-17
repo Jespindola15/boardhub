@@ -58,7 +58,7 @@ function SideContent({ square, ownership, owner }) {
       )}
       <div className="sq__name">{square.name}</div>
       <div className="sq__price">
-        {square.price ? formatMoney(square.price) : square.amount ? `Paga ${formatMoney(square.amount)}` : ''}
+        {square.price ? formatMoney(square.price) : square.amount ? `Paga ${formatMoney(square.amount)}${square.percent ? ` o ${square.percent} %` : ''}` : ''}
       </div>
       {ownerColor && <div className="sq__owner" style={{ background: ownerColor }} title={`Propietario: ${owner.name}`} />}
       {ownership?.mortgaged && <div className="sq__mortgage">Hipotecada</div>}

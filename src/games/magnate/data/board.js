@@ -79,7 +79,9 @@ const RAW_SQUARES = [
   property('Callejón del Puerto', 'brown', 60, [2, 10, 30, 90, 160, 250]),
   { type: T.COMMUNITY, name: 'Arca Vecinal' },
   property('Pasaje Ferroviario', 'brown', 60, [4, 20, 60, 180, 320, 450]),
-  { type: T.TAX, name: 'Impuesto a la Renta', amount: 200 },
+  // 00009: se elige entre el monto fijo y el 10 % del patrimonio. El monto fijo impreso en el tablero
+  // clásico es $200 (el escaneo del reglamento 00009 lo muestra como "$900": ver AUDITORIA, pendiente).
+  { type: T.TAX, name: 'Impuesto a la Renta', amount: 200, percent: 10 },
   station('Estación Norte'),
   property('Avenida Los Álamos', 'lightblue', 100, [6, 30, 90, 270, 400, 550]),
   { type: T.CHANCE, name: 'Fortuna' },

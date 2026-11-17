@@ -70,7 +70,7 @@ export function rollForFirstPlayer(players, rng) {
  * `startingPlayerId` sólo se usa en pruebas para fijar quién empieza.
  */
 /**
- * Opciones de partida. Todas desactivadas = reglamento oficial G0009.
+ * Opciones de partida. Todas desactivadas = reglamento oficial 00009.
  *  - skipPurchase: REGLA DE LA CASA (pedida explícitamente). Quien cae en una propiedad libre
  *    puede pasar sin comprarla ni subastarla; la propiedad sigue en la banca.
  */
@@ -114,6 +114,8 @@ export function createGameState({ id = 'local', players, rng = Math.random, star
     },
     pendingPurchase: null,
     debts: [],
+    incomeTax: null, // { playerId, index }: elección pendiente del Impuesto a la Renta
+    mortgageTransfers: [], // [{ id, playerId, index }]: hipotecadas recibidas sin resolver
     auction: null,
     auctionQueue: [],
     buildingClaim: null,

@@ -1,5 +1,5 @@
 /**
- * Motor de reglas de Magnate — edición de referencia Hasbro G0009.
+ * Motor de reglas de Magnate — edición de referencia Hasbro 00009 (reglas clásicas, sin Speed Die).
  *
  *   applyAction(state, action, rng?) -> { ok: true, state } | { ok: false, error }
  *
@@ -14,7 +14,8 @@
  *  - LIBRES (cualquier jugador en juego, en cualquier momento — G0009 BUILDINGS y DEALS & TRADES):
  *      BUILD, SELL_BUILDING, MORTGAGE, UNMORTGAGE, PROPOSE_TRADE, RESPOND_TRADE, CANCEL_TRADE, RESIGN
  *  - De INTERRUPCIÓN (quien corresponda):
- *      PAY_DEBT, DECLARE_BANKRUPTCY, PLACE_BID, PASS_BID, CLAIM_BUILDING, PLACE_BUILDING
+ *      PAY_DEBT, DECLARE_BANKRUPTCY, PLACE_BID, PASS_BID, CLAIM_BUILDING, PLACE_BUILDING,
+ *      PAY_INCOME_TAX (fijo o 10 %), RESOLVE_MORTGAGE_TRANSFER (levantar o pagar el 10 %)
  *
  * Especificación: docs/reglas/magnate/ESPECIFICACION.md
  */
@@ -27,7 +28,10 @@ import {
   JAIL_FINE,
   MAX_JAIL_TURNS,
   AUCTION_MIN_BID,
+  JAIL_PREPAY_TURNS,
   HOUSES_PER_HOTEL,
+  incomeTaxPercentAmount,
+  mortgageInterest,
   computeRent,
   buildBlocker,
   sellBlocker,
@@ -76,6 +80,8 @@ export function applyAction(state, action, rng = Math.random) {
 /** Interrupción que detiene el turno, si la hay. */
 export function blockingInterrupt(s) {
   if (s.debts.length) return 'debt';
+  if (s.incomeTax) return 'tax';
+  if (s.mortgageTransfers?.length) return 'transfer';
   if (s.placement) return 'placement';
   if (s.buildingClaim) return 'claim';
   if (s.auction) return 'auction';
@@ -91,6 +97,8 @@ function requireTurnAction(s, p, step) {
 
 const MESSAGES_BLOCK = {
   debt: 'Hay una deuda pendiente: el turno sigue cuando se resuelva.',
+  tax: 'Hay que elegir cómo pagar el Impuesto a la Renta.',
+  transfer: 'Quien recibió una propiedad hipotecada tiene que levantarla o pagar el 10 %.',
   placement: 'Hay que colocar el edificio ganado en la subasta.',
   claim: 'Hay una solicitud de edificios en escasez pendiente.',
   auction: 'Hay una subasta en curso.',
@@ -179,7 +187,11 @@ function resolveLanding(s, p, rng, ctx = {}) {
       sendToJail(s, p);
       return;
     case SQUARE_TYPES.TAX:
-      charge(s, p, null, square.amount, square.name);
+      if (square.percent) {
+        // 00009: el jugador elige ANTES de sumar su patrimonio.
+        s.incomeTax = { playerId: p.id, index: square.index };
+        log(s, `${p.name} debe elegir: ${money(square.amount)} o el ${square.percent} % de su patrimonio.`);
+      } else charge(s, p, null, square.amount, square.name);
       return;
     case SQUARE_TYPES.CHANCE:
       drawCard(s, p, 'chance', rng);
@@ -307,6 +319,8 @@ function settle(s) {
     s.phase = 'finished';
     s.winnerId = alive[0].id;
     s.debts = [];
+    s.incomeTax = null;
+    s.mortgageTransfers = [];
     s.auction = null;
     s.auctionQueue = [];
     s.buildingClaim = null;
@@ -315,7 +329,7 @@ function settle(s) {
     log(s, `🏆 ${alive[0].name} gana la partida.`);
     return;
   }
-  if (s.debts.length || s.placement || s.buildingClaim || s.auction) return;
+  if (s.debts.length || s.incomeTax || s.mortgageTransfers?.length || s.placement || s.buildingClaim || s.auction) return;
   if (s.auctionQueue.length) {
     startPropertyAuction(s, s.auctionQueue.shift());
     return;
@@ -324,7 +338,7 @@ function settle(s) {
 }
 
 /* ------------------------------------------------------------------ */
-/* Subastas (abiertas, sin orden de turno, desde $10)                  */
+/* Subastas (abiertas, sin orden de turno; 00009: desde cualquier monto) */
 /* ------------------------------------------------------------------ */
 
 function startPropertyAuction(s, index) {
@@ -451,8 +465,8 @@ function resolveClaim(s) {
 /* Bancarrota (G0009 HELP! I CAN'T PAY!)                               */
 /* ------------------------------------------------------------------ */
 
-/** Liquidación completa: vende todos los edificios a la banca e hipoteca todo. */
-function liquidateAll(s, p) {
+/** Vende todos los edificios a la banca por la mitad (00009: "one-half the amount paid"). */
+function sellAllBuildings(s, p) {
   for (const sq of BOARD) {
     const own = s.ownership[sq.index];
     if (own?.ownerId !== p.id || !own.houses) continue;
@@ -462,25 +476,28 @@ function liquidateAll(s, p) {
     else s.bank.houses += own.houses;
     own.houses = 0;
   }
-  for (const sq of BOARD) {
-    const own = s.ownership[sq.index];
-    if (own?.ownerId === p.id && !own.mortgaged) {
-      own.mortgaged = true;
-      p.money += sq.mortgage;
-    }
-  }
 }
 
+/**
+ * Bancarrota (00009):
+ *  - ante un jugador: los edificios vuelven a la banca por la mitad y ese dinero va al acreedor,
+ *    que recibe todo lo demás tal como está. Por cada propiedad hipotecada paga en el acto el 10 %
+ *    a la banca (o la levanta entera).
+ *  - ante la banca: la banca subasta todas las propiedades (sin edificios).
+ */
 function bankrupt(s, p, creditorId) {
-  liquidateAll(s, p);
+  sellAllBuildings(s, p);
   const owned = BOARD.filter((sq) => s.ownership[sq.index]?.ownerId === p.id);
   const creditor = creditorId ? player(s, creditorId) : null;
 
   if (creditor && creditor.status !== PLAYER_STATUS.BANKRUPT) {
     creditor.money += p.money;
-    for (const sq of owned) s.ownership[sq.index].ownerId = creditor.id; // siguen hipotecadas, sin recargo
+    for (const sq of owned) {
+      s.ownership[sq.index].ownerId = creditor.id;
+      if (s.ownership[sq.index].mortgaged) addMortgageTransfer(s, creditor.id, sq.index);
+    }
     creditor.jailFreeCards.push(...p.jailFreeCards);
-    log(s, `${p.name} quiebra. ${creditor.name} recibe ${money(p.money)}, sus propiedades hipotecadas y sus cartas.`);
+    log(s, `${p.name} quiebra. ${creditor.name} recibe ${money(p.money)}, sus propiedades y sus cartas.`);
   } else {
     for (const sq of owned) delete s.ownership[sq.index]; // hipotecas canceladas
     s.auctionQueue.push(...owned.map((sq) => sq.index));
@@ -492,6 +509,8 @@ function bankrupt(s, p, creditorId) {
   p.jailFreeCards = [];
   p.status = PLAYER_STATUS.BANKRUPT;
   s.debts = s.debts.filter((d) => d.debtorId !== p.id && d.creditorId !== p.id);
+  s.mortgageTransfers = (s.mortgageTransfers ?? []).filter((t) => t.playerId !== p.id);
+  if (s.incomeTax?.playerId === p.id) s.incomeTax = null;
   s.trades = s.trades.filter((t) => t.fromId !== p.id && t.toId !== p.id);
   if (s.turn.playerId === p.id) s.pendingPurchase = null;
 
@@ -543,8 +562,17 @@ function transferOffer(s, from, to, offer) {
   from.money -= offer.money;
   to.money += offer.money;
   to.jailFreeCards.push(...from.jailFreeCards.splice(0, offer.jailCards));
-  // Las hipotecadas pasan tal cual: el nuevo dueño las levanta cuando quiera (sin recargo en G0009).
-  for (const i of offer.squares) s.ownership[i].ownerId = to.id;
+  for (const i of offer.squares) {
+    s.ownership[i].ownerId = to.id;
+    // 00009 MORTGAGES: quien recibe una hipotecada la levanta ya o paga el 10 % ahora.
+    if (s.ownership[i].mortgaged) addMortgageTransfer(s, to.id, i);
+  }
+}
+
+function addMortgageTransfer(s, playerId, index) {
+  s.mortgageTransfers = s.mortgageTransfers ?? [];
+  s.mortgageTransfers.push({ id: `m${s.seq++}`, playerId, index });
+  log(s, `${player(s, playerId).name} recibe ${BOARD[index].name} hipotecada: debe levantarla o pagar ${money(mortgageInterest(BOARD[index]))} de interés.`);
 }
 
 /* ------------------------------------------------------------------ */
@@ -603,6 +631,7 @@ const HANDLERS = {
   [ACTIONS.PAY_JAIL_FINE](s, p) {
     requireTurnAction(s, p, TURN_STEPS.ROLL);
     check(p.status === PLAYER_STATUS.IN_JAIL, 'No estás en la cárcel.');
+    check(p.jailTurns < JAIL_PREPAY_TURNS, 'En el tercer turno hay que tirar: si no sacas dobles, pagas la multa y avanzas.');
     check(p.money >= JAIL_FINE, `Necesitas ${money(JAIL_FINE)}.`);
     p.money -= JAIL_FINE;
     releaseFromJail(p);
@@ -636,6 +665,36 @@ const HANDLERS = {
     s.pendingPurchase = null;
     s.turn.step = stepAfterResolution(s);
     startPropertyAuction(s, index);
+  },
+
+  /** Impuesto a la Renta (00009): monto fijo o 10 % del patrimonio. */
+  [ACTIONS.PAY_INCOME_TAX](s, p, { mode }) {
+    const t = s.incomeTax;
+    check(t && t.playerId === p.id, 'No tienes que pagar el Impuesto a la Renta.');
+    check(mode === 'flat' || mode === 'percent', 'Elige el monto fijo o el porcentaje.');
+    const sq = BOARD[t.index];
+    const amount = mode === 'flat' ? sq.amount : incomeTaxPercentAmount(s, p.id);
+    s.incomeTax = null;
+    log(s, `${p.name} elige ${mode === 'flat' ? `el monto fijo de ${money(sq.amount)}` : `el ${sq.percent} % de su patrimonio: ${money(amount)}`}.`);
+    charge(s, p, null, amount, sq.name);
+  },
+
+  /** Propiedad hipotecada recibida (00009): levantarla ya (hipoteca + 10 %) o pagar sólo el 10 %. */
+  [ACTIONS.RESOLVE_MORTGAGE_TRANSFER](s, p, { index, lift }) {
+    const list = s.mortgageTransfers ?? [];
+    const t = list.find((x) => x.playerId === p.id && x.index === Number(index));
+    check(t, 'No tienes esa propiedad hipotecada pendiente.');
+    const sq = BOARD[t.index];
+    s.mortgageTransfers = list.filter((x) => x !== t);
+    if (lift) {
+      check(p.money >= sq.unmortgage, `Necesitas ${money(sq.unmortgage)} para levantarla ahora.`);
+      p.money -= sq.unmortgage;
+      s.ownership[t.index].mortgaged = false;
+      log(s, `${p.name} levanta la hipoteca de ${sq.name} por ${money(sq.unmortgage)}.`);
+      return;
+    }
+    // Sólo el interés: si después la levanta, vuelve a pagar hipoteca + 10 %.
+    charge(s, p, null, mortgageInterest(sq), `interés de la hipoteca de ${sq.name}`);
   },
 
   /** Regla de la casa `skipPurchase`: pasar sin comprar ni subastar (no es oficial). */
@@ -839,6 +898,8 @@ const HANDLERS = {
 export function getPendingDeciders(state) {
   if (state.phase !== 'playing') return [];
   if (state.debts.length) return [...new Set(state.debts.map((d) => d.debtorId))];
+  if (state.incomeTax) return [state.incomeTax.playerId];
+  if (state.mortgageTransfers?.length) return [...new Set(state.mortgageTransfers.map((t) => t.playerId))];
   if (state.placement) return [state.placement.playerId];
   if (state.buildingClaim) return state.buildingClaim.eligible.filter((id) => !(id in state.buildingClaim.responses));
   if (state.auction) {
@@ -888,7 +949,7 @@ export function removePlayer(state, playerId, rng) {
 export const definition = {
   id: 'magnate',
   players: { min: 2, max: 8 },
-  edition: 'Hasbro G0009',
+  edition: 'Hasbro 00009 (reglas clásicas)',
   setup: ({ id, players, options, rng }) =>
     _create({ id, rng, options, players: players.map((p, i) => ({ ...p, tokenId: TOKEN_IDS[i % TOKEN_IDS.length] })) }),
   applyAction,

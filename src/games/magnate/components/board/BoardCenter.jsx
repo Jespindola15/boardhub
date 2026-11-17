@@ -6,6 +6,7 @@ import SquareIcon from '../icons/SquareIcon.jsx';
 import AuctionPanel from '../controls/AuctionPanel.jsx';
 import DebtPanel from '../controls/DebtPanel.jsx';
 import { ClaimPanel, PlacementPanel } from '../controls/ShortagePanels.jsx';
+import { IncomeTaxPanel, MortgageTransferPanel } from '../controls/TaxPanels.jsx';
 import CardReveal from '../controls/CardReveal.jsx';
 import { getCurrentPlayer, getPlayer } from '../../state/selectors.js';
 import { ACTIONS, getActingPlayerId, JAIL_FINE } from '../../engine/index.js';
@@ -55,6 +56,10 @@ export default function BoardCenter({ state, send, onOpenTrade, onNewGame }) {
           <Winner state={state} onNewGame={onNewGame} />
         ) : state.debts.length ? (
           <DebtPanel state={state} send={send} />
+        ) : state.incomeTax ? (
+          <IncomeTaxPanel state={state} send={send} />
+        ) : state.mortgageTransfers?.length ? (
+          <MortgageTransferPanel state={state} send={send} />
         ) : state.placement ? (
           <PlacementPanel state={state} send={send} />
         ) : state.buildingClaim ? (
