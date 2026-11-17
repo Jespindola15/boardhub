@@ -1,12 +1,25 @@
 /**
- * Tests del motor de reglas de Magnate. Ejecutar: npm test
- * Usa el runner nativo de Node (sin dependencias).
+ * Tests del motor de Magnate frente al reglamento Hasbro G0009.
+ * Los identificadores (A2, B4, …) remiten a docs/reglas/magnate/AUDITORIA.md.
+ * Ejecutar: npm test
  */
-import { test } from 'node:test';
+import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { applyAction, ACTIONS, getActingPlayerId, liquidationValue, sellBlocker } from '../src/games/magnate/engine/index.js';
+import {
+  applyAction,
+  ACTIONS,
+  getActingPlayerId,
+  getPendingDeciders,
+  maxRaisable,
+  sellBlocker,
+  buildBlocker,
+  mortgageBlocker,
+  unmortgageBlocker,
+  legalPlacements,
+} from '../src/games/magnate/engine/index.js';
 import { createGameState, BANK_HOUSES, BANK_HOTELS, HOTEL } from '../src/games/magnate/state/gameState.js';
-import { BOARD } from '../src/games/magnate/data/board.js';
+import { BOARD, isOwnable } from '../src/games/magnate/data/board.js';
+import { CHANCE_CARDS, COMMUNITY_CARDS } from '../src/games/magnate/data/cards.js';
 
 /* ---------- utilidades ---------- */
 
@@ -25,328 +38,906 @@ const dice = (...faces) => {
   const fallback = seeded(7);
   return () => (q.length ? (q.shift() - 1) / 6 + 0.01 : fallback());
 };
-
-function newGame(n = 3) {
-  const players = Array.from({ length: n }, (_, i) => ({ id: `p${i + 1}`, name: `J${i + 1}`, colorId: 'violet', tokenId: 'star' }));
-  return createGameState({ players, rng: seeded(42) });
-}
+const mkPlayers = (n) => Array.from({ length: n }, (_, i) => ({ id: `p${i + 1}`, name: `J${i + 1}`, colorId: 'violet', tokenId: 'star' }));
+const newGame = (n = 3) => createGameState({ players: mkPlayers(n), rng: seeded(42), startingPlayerId: 'p1' });
 
 function act(state, type, playerId, payload, rng) {
   const r = applyAction(state, { type, playerId, payload }, rng);
-  assert.ok(r.ok, `${type} falló: ${r.error}`);
+  assert.ok(r.ok, `${type} (${playerId}) falló: ${r.error}`);
   return r.state;
 }
+function reject(state, type, playerId, payload, rng) {
+  const r = applyAction(state, { type, playerId, payload }, rng);
+  assert.equal(r.ok, false, `${type} (${playerId}) debía rechazarse`);
+  return r.error;
+}
 const P = (s, id) => s.players.find((p) => p.id === id);
+const own = (s, index, ownerId, houses = 0, mortgaged = false) => (s.ownership[index] = { ownerId, houses, mortgaged });
 
-/* ---------- tests ---------- */
+/* ================================================================== */
 
-test('lanzar, mover, comprar y cobrar alquiler', () => {
-  let s = newGame();
-  s = act(s, ACTIONS.ROLL_DICE, 'p1', {}, dice(1, 2)); // 3 → Pasaje Ferroviario
-  assert.equal(P(s, 'p1').position, 3);
-  assert.equal(s.turn.step, 'buy');
-  s = act(s, ACTIONS.BUY_PROPERTY, 'p1');
-  assert.equal(P(s, 'p1').money, 1440);
-  s = act(s, ACTIONS.END_TURN, 'p1');
-  s = act(s, ACTIONS.ROLL_DICE, 'p2', {}, dice(2, 1));
-  assert.equal(P(s, 'p2').money, 1496);
-  assert.equal(P(s, 'p1').money, 1444);
-});
+describe('A. Preparación y turno', () => {
+  test('A1 cada jugador empieza con $1.500 en la Salida', () => {
+    const s = newGame(4);
+    assert.ok(s.players.every((p) => p.money === 1500 && p.position === 0));
+  });
 
-test('no se puede actuar fuera de turno', () => {
-  const s = newGame();
-  const r = applyAction(s, { type: ACTIONS.ROLL_DICE, playerId: 'p2' }, dice(1, 2));
-  assert.equal(r.ok, false);
-});
+  test('A2 empieza la tirada más alta; los empatados vuelven a tirar', () => {
+    // p1 = 7, p2 = 12, p3 = 12 → desempate: p2 = 2, p3 = 4 → empieza p3
+    const s = createGameState({ players: mkPlayers(3), rng: dice(3, 4, 6, 6, 6, 6, 1, 1, 2, 2) });
+    assert.equal(s.turn.playerId, 'p3');
+    assert.deepEqual(s.players.map((p) => p.id), ['p1', 'p2', 'p3']); // el orden de asientos no cambia
+    assert.ok(s.log.some((l) => l.text.startsWith('Desempate')));
+  });
 
-test('pasar por la Salida cobra $200', () => {
-  let s = newGame();
-  s.players[0].position = 38;
-  s = act(s, ACTIONS.ROLL_DICE, 'p1', {}, dice(1, 3)); // 38 + 4 = 2 → Arca Vecinal
-  assert.equal(P(s, 'p1').position, 2);
-  assert.ok(s.log.some((l) => l.text.includes('Salida')));
-});
-
-test('dobles dan otra tirada y tres dobles mandan a la cárcel', () => {
-  let s = newGame();
-  s = act(s, ACTIONS.ROLL_DICE, 'p1', {}, dice(2, 2)); // 4 → impuesto
-  assert.equal(s.turn.step, 'roll');
-  s = act(s, ACTIONS.ROLL_DICE, 'p1', {}, dice(3, 3)); // 10 → visita
-  assert.equal(s.turn.step, 'roll');
-  s = act(s, ACTIONS.ROLL_DICE, 'p1', {}, dice(1, 1));
-  assert.equal(P(s, 'p1').status, 'in-jail');
-  assert.equal(P(s, 'p1').position, 10);
-  assert.equal(s.turn.step, 'end');
-});
-
-test('cárcel: al tercer intento fallido paga $50 y avanza', () => {
-  let s = newGame(2);
-  s.players[0].status = 'in-jail';
-  s.players[0].position = 10;
-  for (let i = 0; i < 2; i++) {
-    s = act(s, ACTIONS.ROLL_DICE, 'p1', {}, dice(1, 2));
-    assert.equal(P(s, 'p1').status, 'in-jail');
-    s = act(s, ACTIONS.END_TURN, 'p1');
-    s = act(s, ACTIONS.ROLL_DICE, 'p2', {}, dice(1, 3)); // p2 a 4 (impuesto)
+  test('A2 el turno sigue hacia la izquierda desde quien empezó', () => {
+    let s = createGameState({ players: mkPlayers(3), rng: seeded(1), startingPlayerId: 'p2' });
+    s = act(s, ACTIONS.ROLL_DICE, 'p2', {}, dice(1, 2));
     if (s.turn.step === 'buy') s = act(s, ACTIONS.BUY_PROPERTY, 'p2');
     s = act(s, ACTIONS.END_TURN, 'p2');
-  }
-  const before = P(s, 'p1').money;
-  s = act(s, ACTIONS.ROLL_DICE, 'p1', {}, dice(1, 2));
-  assert.equal(P(s, 'p1').status, 'active');
-  assert.equal(P(s, 'p1').position, 13);
-  assert.equal(P(s, 'p1').money, before - 50);
+    assert.equal(s.turn.playerId, 'p3');
+  });
+
+  test('A3 dos dados, se avanza la suma; compra y alquiler', () => {
+    let s = newGame();
+    s = act(s, ACTIONS.ROLL_DICE, 'p1', {}, dice(1, 2)); // 3
+    assert.equal(P(s, 'p1').position, 3);
+    s = act(s, ACTIONS.BUY_PROPERTY, 'p1');
+    assert.equal(P(s, 'p1').money, 1440);
+    s = act(s, ACTIONS.END_TURN, 'p1');
+    s = act(s, ACTIONS.ROLL_DICE, 'p2', {}, dice(2, 1));
+    assert.equal(P(s, 'p2').money, 1496);
+    assert.equal(P(s, 'p1').money, 1444);
+  });
+
+  test('A4 pasar por la Salida cobra $200', () => {
+    let s = newGame();
+    s.players[0].position = 38;
+    s = act(s, ACTIONS.ROLL_DICE, 'p1', {}, dice(1, 3));
+    assert.equal(P(s, 'p1').position, 2);
+    assert.ok(s.log.some((l) => l.text.includes('pasa por la Salida y cobra $200')));
+  });
+
+  test('A5/A6 dobles dan otra tirada; con tres dobles se va a la cárcel sin mover', () => {
+    let s = newGame();
+    s = act(s, ACTIONS.ROLL_DICE, 'p1', {}, dice(2, 2)); // 4
+    assert.equal(s.turn.step, 'roll');
+    s = act(s, ACTIONS.ROLL_DICE, 'p1', {}, dice(3, 3)); // 10
+    assert.equal(s.turn.step, 'roll');
+    s = act(s, ACTIONS.ROLL_DICE, 'p1', {}, dice(1, 1));
+    assert.equal(P(s, 'p1').status, 'in-jail');
+    assert.equal(P(s, 'p1').position, 10);
+    assert.equal(s.turn.step, 'end');
+  });
+
+  test('A7 caer en "¡A la cárcel!" con dobles termina el turno', () => {
+    let s = newGame();
+    s.players[0].position = 26;
+    s = act(s, ACTIONS.ROLL_DICE, 'p1', {}, dice(2, 2));
+    assert.equal(P(s, 'p1').status, 'in-jail');
+    assert.equal(s.turn.step, 'end');
+    reject(s, ACTIONS.ROLL_DICE, 'p1', {}, dice(1, 2));
+  });
+
+  test('A8 en la Plaza Libre no pasa nada', () => {
+    let s = newGame();
+    s.players[0].position = 15;
+    s = act(s, ACTIONS.ROLL_DICE, 'p1', {}, dice(2, 3));
+    assert.equal(P(s, 'p1').position, 20);
+    assert.equal(P(s, 'p1').money, 1500);
+  });
+
+  test('A9 impuestos: $200 y $100 a la banca', () => {
+    let s = newGame();
+    s = act(s, ACTIONS.ROLL_DICE, 'p1', {}, dice(1, 3));
+    assert.equal(P(s, 'p1').money, 1300);
+    let t = newGame();
+    t.players[0].position = 36;
+    t = act(t, ACTIONS.ROLL_DICE, 'p1', {}, dice(1, 1));
+    assert.equal(P(t, 'p1').money, 1400);
+  });
+
+  test('A10 admite de 2 a 8 jugadores', () => {
+    assert.throws(() => createGameState({ players: mkPlayers(1) }));
+    assert.throws(() => createGameState({ players: mkPlayers(9) }));
+    assert.doesNotThrow(() => createGameState({ players: mkPlayers(8) }));
+  });
+
+  test('no se puede actuar fuera de turno', () => {
+    reject(newGame(), ACTIONS.ROLL_DICE, 'p2', {}, dice(1, 2));
+  });
 });
 
-test('salir de la cárcel con dobles no da tirada extra', () => {
-  let s = newGame(2);
-  s.players[0].status = 'in-jail';
-  s.players[0].position = 10;
-  s = act(s, ACTIONS.ROLL_DICE, 'p1', {}, dice(4, 4)); // 18 → Paseo del Faro
-  assert.equal(P(s, 'p1').status, 'active');
-  s = act(s, ACTIONS.DECLINE_PROPERTY, 'p1');
-  s = act(s, ACTIONS.PASS_BID, 'p1');
-  s = act(s, ACTIONS.PASS_BID, 'p2');
-  assert.equal(s.turn.step, 'end');
+/* ================================================================== */
+
+describe('B. Compra y subastas', () => {
+  const toAuction = () => {
+    let s = newGame(3);
+    s = act(s, ACTIONS.ROLL_DICE, 'p1', {}, dice(2, 3)); // 5: Estación Norte
+    return act(s, ACTIONS.DECLINE_PROPERTY, 'p1');
+  };
+
+  test('B1/B2 rechazar la compra abre una subasta en la que participan todos', () => {
+    const s = toAuction();
+    assert.deepEqual(s.auction.participants, ['p1', 'p2', 'p3']);
+    assert.deepEqual(getPendingDeciders(s).sort(), ['p1', 'p2', 'p3']);
+  });
+
+  test('B3 la primera puja debe ser de al menos $10', () => {
+    const s = toAuction();
+    reject(s, ACTIONS.PLACE_BID, 'p2', { amount: 9 });
+    act(s, ACTIONS.PLACE_BID, 'p2', { amount: 10 });
+  });
+
+  test('B4 subasta abierta: se puja sin orden y quien no subió puede volver a pujar', () => {
+    let s = toAuction();
+    s = act(s, ACTIONS.PLACE_BID, 'p3', { amount: 20 }); // p3 puja primero, sin esperar turno
+    s = act(s, ACTIONS.PASS_BID, 'p1');
+    s = act(s, ACTIONS.PLACE_BID, 'p2', { amount: 21 }); // sube $1
+    assert.deepEqual(s.auction.passed, []); // una nueva puja reabre para todos
+    s = act(s, ACTIONS.PLACE_BID, 'p1', { amount: 60 }); // p1 vuelve a entrar
+    s = act(s, ACTIONS.PASS_BID, 'p2');
+    assert.ok(s.auction, 'falta que p3 diga que no sube');
+    s = act(s, ACTIONS.PASS_BID, 'p3');
+    assert.equal(s.auction, null);
+    assert.equal(s.ownership[5].ownerId, 'p1');
+    assert.equal(P(s, 'p1').money, 1440);
+  });
+
+  test('B4 el mejor postor no puede pujar contra sí mismo ni "pasar"', () => {
+    let s = toAuction();
+    s = act(s, ACTIONS.PLACE_BID, 'p2', { amount: 30 });
+    reject(s, ACTIONS.PLACE_BID, 'p2', { amount: 40 });
+    reject(s, ACTIONS.PASS_BID, 'p2');
+  });
+
+  test('B5 si nadie puja, la propiedad sigue siendo de la banca', () => {
+    let s = toAuction();
+    for (const id of ['p1', 'p2', 'p3']) s = act(s, ACTIONS.PASS_BID, id);
+    assert.equal(s.ownership[5], undefined);
+    assert.equal(s.turn.step, 'end');
+  });
+
+  test('B6 sin efectivo no se puede comprar: hay que subastar', () => {
+    let s = newGame();
+    s.players[0].money = 100;
+    s = act(s, ACTIONS.ROLL_DICE, 'p1', {}, dice(2, 3));
+    reject(s, ACTIONS.BUY_PROPERTY, 'p1');
+    act(s, ACTIONS.DECLINE_PROPERTY, 'p1');
+  });
+
+  test('B7 nadie puja más que su efectivo', () => {
+    const s = toAuction();
+    s.players[1].money = 50;
+    reject(s, ACTIONS.PLACE_BID, 'p2', { amount: 51 });
+  });
+
+  test('B8 un jugador en la cárcel puede pujar', () => {
+    const s = toAuction();
+    s.players[2].status = 'in-jail';
+    s.players[2].position = 10;
+    act(s, ACTIONS.PLACE_BID, 'p3', { amount: 10 });
+  });
+
+  test('la subasta bloquea las acciones de turno', () => {
+    const s = toAuction();
+    reject(s, ACTIONS.END_TURN, 'p1');
+  });
 });
 
-test('rechazar la compra abre una subasta', () => {
-  let s = newGame(3);
-  s = act(s, ACTIONS.ROLL_DICE, 'p1', {}, dice(2, 3)); // 5 → Estación Norte
-  s = act(s, ACTIONS.DECLINE_PROPERTY, 'p1');
-  assert.ok(s.auction);
-  assert.equal(getActingPlayerId(s), 'p1');
-  s = act(s, ACTIONS.PLACE_BID, 'p1', { amount: 50 });
-  s = act(s, ACTIONS.PLACE_BID, 'p2', { amount: 120 });
-  s = act(s, ACTIONS.PASS_BID, 'p3');
-  s = act(s, ACTIONS.PASS_BID, 'p1');
-  assert.equal(s.auction, null);
-  assert.equal(s.ownership[5].ownerId, 'p2');
-  assert.equal(P(s, 'p2').money, 1380);
+/* ================================================================== */
+
+describe('C. Alquileres', () => {
+  test('C1 grupo completo sin edificar: alquiler doble', () => {
+    let s = newGame(2);
+    own(s, 37, 'p2');
+    own(s, 39, 'p2');
+    s.players[0].position = 35;
+    s = act(s, ACTIONS.ROLL_DICE, 'p1', {}, dice(1, 3));
+    assert.equal(P(s, 'p1').money, 1400);
+  });
+
+  test('C2 con una calle del grupo hipotecada, las demás cobran el alquiler aumentado', () => {
+    let s = newGame(2);
+    own(s, 37, 'p2', 0, true);
+    own(s, 39, 'p2');
+    s.players[0].position = 35;
+    s = act(s, ACTIONS.ROLL_DICE, 'p1', {}, dice(1, 3)); // 39
+    assert.equal(P(s, 'p1').money, 1400);
+    let t = newGame(2);
+    own(t, 37, 'p2', 0, true);
+    own(t, 39, 'p2');
+    t.players[0].position = 34;
+    t = act(t, ACTIONS.ROLL_DICE, 'p1', {}, dice(1, 2)); // 37 hipotecada
+    assert.equal(P(t, 'p1').money, 1500);
+  });
+
+  test('C3 estaciones según cuántas tenga el dueño (las hipotecadas cuentan)', () => {
+    let s = newGame(2);
+    own(s, 5, 'p2');
+    own(s, 15, 'p2');
+    own(s, 25, 'p2', 0, true);
+    s.players[0].position = 10;
+    s = act(s, ACTIONS.ROLL_DICE, 'p1', {}, dice(2, 3));
+    assert.equal(P(s, 'p1').money, 1400);
+  });
+
+  test('C4 servicios: se tiran los dados de nuevo (4× con uno, 10× con los dos)', () => {
+    let s = newGame(2);
+    own(s, 12, 'p2');
+    s.players[0].position = 10;
+    s = act(s, ACTIONS.ROLL_DICE, 'p1', {}, dice(1, 1, 3, 4)); // llega con 2; alquiler 4 × 7
+    assert.equal(P(s, 'p1').money, 1500 - 28);
+    let t = newGame(2);
+    own(t, 12, 'p2');
+    own(t, 28, 'p2');
+    t.players[0].position = 10;
+    t = act(t, ACTIONS.ROLL_DICE, 'p1', {}, dice(1, 1, 6, 5)); // 10 × 11
+    assert.equal(P(t, 'p1').money, 1500 - 110);
+  });
+
+  test('C5 el dueño cobra aunque esté en la cárcel', () => {
+    let s = newGame(2);
+    own(s, 3, 'p2');
+    s.players[1].status = 'in-jail';
+    s.players[1].position = 10;
+    s = act(s, ACTIONS.ROLL_DICE, 'p1', {}, dice(1, 2));
+    assert.equal(P(s, 'p2').money, 1504);
+  });
+
+  test('C7 carta: estación más cercana paga el doble', () => {
+    let s = newGame(2);
+    own(s, 15, 'p2');
+    s.players[0].position = 4;
+    s.decks.chance = ['c5', ...s.decks.chance.filter((c) => c !== 'c5')];
+    s = act(s, ACTIONS.ROLL_DICE, 'p1', {}, dice(1, 2)); // 7 → 15
+    assert.equal(P(s, 'p1').position, 15);
+    assert.equal(P(s, 'p1').money, 1450);
+  });
+
+  test('C7 carta: servicio más cercano, se tiran los dados y se paga 10×', () => {
+    let s = newGame(2);
+    own(s, 12, 'p2');
+    s.players[0].position = 4;
+    s.decks.chance = ['c7', ...s.decks.chance.filter((c) => c !== 'c7')];
+    s = act(s, ACTIONS.ROLL_DICE, 'p1', {}, dice(1, 2, 2, 3)); // 7 → servicio 12; 10 × 5
+    assert.equal(P(s, 'p1').position, 12);
+    assert.equal(P(s, 'p1').money, 1450);
+  });
 });
 
-test('grupo completo: alquiler doble, construcción pareja y hotel', () => {
-  let s = newGame(2);
-  s.ownership[1] = { ownerId: 'p1', houses: 0, mortgaged: false };
-  s.ownership[3] = { ownerId: 'p1', houses: 0, mortgaged: false };
-  // construcción pareja
-  s = act(s, ACTIONS.BUILD, 'p1', { index: 1 });
-  const r = applyAction(s, { type: ACTIONS.BUILD, playerId: 'p1', payload: { index: 1 } });
-  assert.equal(r.ok, false);
-  s = act(s, ACTIONS.BUILD, 'p1', { index: 3 });
-  for (let i = 0; i < 3; i++) {
+/* ================================================================== */
+
+describe('D. Construcción', () => {
+  const browns = (s, owner = 'p1') => {
+    own(s, 1, owner);
+    own(s, 3, owner);
+  };
+
+  test('D1/D3/D4 grupo completo, construcción pareja, hotel y alquiler con hotel', () => {
+    let s = newGame(2);
+    browns(s);
     s = act(s, ACTIONS.BUILD, 'p1', { index: 1 });
+    reject(s, ACTIONS.BUILD, 'p1', { index: 1 });
     s = act(s, ACTIONS.BUILD, 'p1', { index: 3 });
-  }
-  assert.equal(s.bank.houses, BANK_HOUSES - 8);
-  s = act(s, ACTIONS.BUILD, 'p1', { index: 3 }); // hotel
-  assert.equal(s.ownership[3].houses, HOTEL);
-  assert.equal(s.bank.hotels, BANK_HOTELS - 1);
-  assert.equal(s.bank.houses, BANK_HOUSES - 4);
-  // alquiler con hotel
-  s = act(s, ACTIONS.ROLL_DICE, 'p1', {}, dice(1, 3)); // p1 → 4 impuesto
-  s = act(s, ACTIONS.END_TURN, 'p1');
-  const m = P(s, 'p2').money;
-  s = act(s, ACTIONS.ROLL_DICE, 'p2', {}, dice(1, 2)); // → 3 (hotel)
-  assert.equal(P(s, 'p2').money, m - 450);
+    for (let i = 0; i < 3; i++) {
+      s = act(s, ACTIONS.BUILD, 'p1', { index: 1 });
+      s = act(s, ACTIONS.BUILD, 'p1', { index: 3 });
+    }
+    assert.equal(s.bank.houses, BANK_HOUSES - 8);
+    s = act(s, ACTIONS.BUILD, 'p1', { index: 3 });
+    assert.equal(s.ownership[3].houses, HOTEL);
+    assert.equal(s.bank.hotels, BANK_HOTELS - 1);
+    assert.equal(s.bank.houses, BANK_HOUSES - 4);
+    reject(s, ACTIONS.BUILD, 'p1', { index: 3 }); // un hotel por calle
+    s = act(s, ACTIONS.ROLL_DICE, 'p1', {}, dice(1, 3));
+    s = act(s, ACTIONS.END_TURN, 'p1');
+    const m = P(s, 'p2').money;
+    s = act(s, ACTIONS.ROLL_DICE, 'p2', {}, dice(1, 2));
+    assert.equal(P(s, 'p2').money, m - 450);
+  });
+
+  test('D1 sin grupo completo no se construye', () => {
+    const s = newGame(2);
+    own(s, 1, 'p1');
+    reject(s, ACTIONS.BUILD, 'p1', { index: 1 });
+  });
+
+  test('D2 se puede construir fuera del propio turno', () => {
+    const s = newGame(2);
+    browns(s, 'p2');
+    const t = act(s, ACTIONS.BUILD, 'p2', { index: 1 });
+    assert.equal(t.ownership[1].houses, 1);
+    assert.equal(P(t, 'p2').money, 1450);
+  });
+
+  test('D5 no se construye si alguna calle del grupo está hipotecada', () => {
+    const s = newGame(2);
+    own(s, 1, 'p1');
+    own(s, 3, 'p1', 0, true);
+    reject(s, ACTIONS.BUILD, 'p1', { index: 1 });
+  });
+
+  test('D7 sin casas en la banca no se puede construir', () => {
+    const s = newGame(2);
+    browns(s);
+    s.bank.houses = 0;
+    reject(s, ACTIONS.BUILD, 'p1', { index: 1 });
+  });
+
+  test('D8 escasez: dos interesados en la última casa → subasta desde $10', () => {
+    let s = newGame(2);
+    browns(s, 'p1');
+    own(s, 37, 'p2');
+    own(s, 39, 'p2');
+    s.bank.houses = 1;
+    s = act(s, ACTIONS.BUILD, 'p1', { index: 1 });
+    assert.ok(s.buildingClaim);
+    assert.deepEqual(getPendingDeciders(s), ['p2']);
+    reject(s, ACTIONS.ROLL_DICE, 'p1', {}, dice(1, 2)); // bloquea el turno
+    s = act(s, ACTIONS.CLAIM_BUILDING, 'p2', { want: true });
+    assert.equal(s.auction.kind, 'building');
+    reject(s, ACTIONS.PLACE_BID, 'p1', { amount: 5 });
+    s = act(s, ACTIONS.PLACE_BID, 'p1', { amount: 10 });
+    s = act(s, ACTIONS.PLACE_BID, 'p2', { amount: 15 });
+    s = act(s, ACTIONS.PASS_BID, 'p1');
+    assert.deepEqual(s.placement, { playerId: 'p2', buildingType: 'house' });
+    assert.deepEqual(legalPlacements(s, 'p2', 'house'), [37, 39]);
+    reject(s, ACTIONS.MORTGAGE, 'p2', { index: 37 }); // primero debe colocarla
+    s = act(s, ACTIONS.PLACE_BUILDING, 'p2', { index: 39 });
+    assert.equal(s.ownership[39].houses, 1);
+    assert.equal(P(s, 'p2').money, 1485); // paga la puja, no el coste de la ficha
+    assert.equal(s.bank.houses, 0);
+  });
+
+  test('D8 escasez: si nadie más la quiere, se construye normalmente', () => {
+    let s = newGame(2);
+    browns(s, 'p1');
+    own(s, 37, 'p2');
+    own(s, 39, 'p2');
+    s.bank.houses = 1;
+    s = act(s, ACTIONS.BUILD, 'p1', { index: 1 });
+    s = act(s, ACTIONS.CLAIM_BUILDING, 'p2', { want: false });
+    assert.equal(s.ownership[1].houses, 1);
+    assert.equal(P(s, 'p1').money, 1450);
+  });
+
+  test('D10 venta de casas a mitad de precio y de forma pareja', () => {
+    let s = newGame(2);
+    own(s, 1, 'p1', 2);
+    own(s, 3, 'p1', 1);
+    s.bank.houses -= 3;
+    reject(s, ACTIONS.SELL_BUILDING, 'p1', { index: 3 });
+    s = act(s, ACTIONS.SELL_BUILDING, 'p1', { index: 1 });
+    assert.equal(P(s, 'p1').money, 1525);
+  });
+
+  test('D11 vender un hotel lo cambia por 4 casas; sin 4 casas en la banca no se puede', () => {
+    let s = newGame(2);
+    own(s, 37, 'p1', HOTEL);
+    own(s, 39, 'p1', HOTEL);
+    s.bank.hotels -= 2;
+    s = act(s, ACTIONS.SELL_BUILDING, 'p1', { index: 39 });
+    assert.equal(s.ownership[39].houses, 4);
+    assert.equal(P(s, 'p1').money, 1600);
+    const t = newGame(2);
+    own(t, 37, 'p1', HOTEL);
+    own(t, 39, 'p1', HOTEL);
+    t.bank.houses = 3;
+    reject(t, ACTIONS.SELL_BUILDING, 'p1', { index: 39 });
+  });
 });
 
-test('alquiler doble sin edificar con grupo completo', () => {
-  let s = newGame(2);
-  s.ownership[37] = { ownerId: 'p2', houses: 0, mortgaged: false };
-  s.ownership[39] = { ownerId: 'p2', houses: 0, mortgaged: false };
-  s.players[0].position = 35;
-  s = act(s, ACTIONS.ROLL_DICE, 'p1', {}, dice(1, 3)); // 39
-  assert.equal(P(s, 'p1').money, 1500 - 100);
+/* ================================================================== */
+
+describe('E. Hipotecas', () => {
+  test('E1 hay que vender los edificios del grupo antes de hipotecar', () => {
+    const s = newGame(2);
+    own(s, 1, 'p1', 1);
+    own(s, 3, 'p1');
+    assert.ok(mortgageBlocker(s, 'p1', 3));
+  });
+
+  test('E2/E3 se cobra la mitad y se levanta pagando el coste impreso en la ficha', () => {
+    let s = newGame(2);
+    own(s, 39, 'p1');
+    s = act(s, ACTIONS.MORTGAGE, 'p1', { index: 39 });
+    assert.equal(P(s, 'p1').money, 1700);
+    s = act(s, ACTIONS.UNMORTGAGE, 'p1', { index: 39 });
+    assert.equal(P(s, 'p1').money, 1480);
+  });
+
+  test('E3 costes de levantar la hipoteca de la edición', () => {
+    const expected = { 1: 33, 3: 33, 5: 110, 12: 83, 28: 83, 34: 176, 37: 193, 39: 220 };
+    for (const [i, v] of Object.entries(expected)) assert.equal(BOARD[i].unmortgage, v, BOARD[i].name);
+    for (const sq of BOARD.filter(isOwnable)) assert.equal(sq.mortgage, sq.price / 2);
+  });
+
+  test('E4 se puede hipotecar fuera del propio turno', () => {
+    const s = newGame(2);
+    own(s, 39, 'p2');
+    act(s, ACTIONS.MORTGAGE, 'p2', { index: 39 });
+  });
+
+  test('E5/H4 negociar una propiedad hipotecada no tiene recargo; se levanta por el coste de la ficha', () => {
+    let s = newGame(2);
+    own(s, 39, 'p1', 0, true);
+    s = act(s, ACTIONS.PROPOSE_TRADE, 'p1', { toId: 'p2', give: { squares: [39] }, get: { money: 100 } });
+    s = act(s, ACTIONS.RESPOND_TRADE, 'p2', { tradeId: s.trades[0].id, accept: true });
+    assert.equal(s.ownership[39].ownerId, 'p2');
+    assert.equal(s.ownership[39].mortgaged, true);
+    assert.equal(P(s, 'p2').money, 1400);
+    s = act(s, ACTIONS.UNMORTGAGE, 'p2', { index: 39 }); // fuera de su turno
+    assert.equal(P(s, 'p2').money, 1180);
+  });
 });
 
-test('hipoteca: sin alquiler y se levanta pagando 110 %', () => {
-  let s = newGame(2);
-  s.ownership[39] = { ownerId: 'p1', houses: 0, mortgaged: false };
-  s = act(s, ACTIONS.MORTGAGE, 'p1', { index: 39 });
-  assert.equal(P(s, 'p1').money, 1700);
-  s = act(s, ACTIONS.UNMORTGAGE, 'p1', { index: 39 });
-  assert.equal(P(s, 'p1').money, 1700 - 220);
+/* ================================================================== */
+
+describe('F. Deudas y bancarrota', () => {
+  test('F2 no se puede quebrar si alcanza liquidando', () => {
+    let s = newGame(2);
+    own(s, 39, 'p2');
+    own(s, 37, 'p1');
+    s.players[0].position = 35;
+    s.players[0].money = 10;
+    s = act(s, ACTIONS.ROLL_DICE, 'p1', {}, dice(1, 3)); // alquiler 50
+    assert.equal(s.debts.length, 1);
+    assert.equal(maxRaisable(s, 'p1'), 185);
+    reject(s, ACTIONS.DECLARE_BANKRUPTCY, 'p1');
+    s = act(s, ACTIONS.MORTGAGE, 'p1', { index: 37 });
+    s = act(s, ACTIONS.PAY_DEBT, 'p1');
+    assert.equal(P(s, 'p1').money, 135);
+  });
+
+  test('F3 negociar durante una deuda para reunir el dinero', () => {
+    let s = newGame(3);
+    own(s, 39, 'p2', HOTEL);
+    own(s, 37, 'p2', HOTEL);
+    own(s, 5, 'p1');
+    s.bank.hotels -= 2;
+    s.players[0].position = 35;
+    s.players[0].money = 0;
+    s = act(s, ACTIONS.ROLL_DICE, 'p1', {}, dice(1, 3)); // debe 2000
+    assert.ok(s.debts.length);
+    reject(s, ACTIONS.END_TURN, 'p1');
+    s = act(s, ACTIONS.PROPOSE_TRADE, 'p1', { toId: 'p3', give: { squares: [5] }, get: { money: 1400 } });
+    s = act(s, ACTIONS.RESPOND_TRADE, 'p3', { tradeId: s.trades[0].id, accept: true });
+    assert.equal(P(s, 'p1').money, 1400);
+    reject(s, ACTIONS.PAY_DEBT, 'p1');
+    assert.ok(maxRaisable(s, 'p1') < 2000);
+    s = act(s, ACTIONS.DECLARE_BANKRUPTCY, 'p1');
+    assert.equal(P(s, 'p2').money, 1500 + 1400);
+  });
+
+  test('F3 el endeudado no puede construir ni levantar hipotecas', () => {
+    let s = newGame(2);
+    own(s, 39, 'p2');
+    own(s, 37, 'p1', 0, true);
+    s.players[0].position = 35;
+    s.players[0].money = 10;
+    own(s, 1, 'p1');
+    own(s, 3, 'p1');
+    s = act(s, ACTIONS.ROLL_DICE, 'p1', {}, dice(1, 3));
+    assert.ok(buildBlocker(s, 'p1', 1));
+    assert.ok(unmortgageBlocker(s, 'p1', 37));
+  });
+
+  test('F4 bancarrota ante un jugador durante un alquiler: liquida todo y transfiere sin recargo', () => {
+    let s = newGame(3);
+    own(s, 39, 'p2', HOTEL);
+    own(s, 37, 'p2', HOTEL);
+    s.bank.hotels -= 2;
+    own(s, 1, 'p1', 1);
+    own(s, 3, 'p1', 1);
+    own(s, 5, 'p1');
+    s.bank.houses -= 2;
+    s.players[0].jailFreeCards = [{ deck: 'chance', cardId: 'c9' }];
+    s.decks.chance = s.decks.chance.filter((c) => c !== 'c9');
+    s.players[0].position = 35;
+    s.players[0].money = 300;
+    s = act(s, ACTIONS.ROLL_DICE, 'p1', {}, dice(1, 3)); // 2000
+    assert.equal(getActingPlayerId(s), 'p1');
+    s = act(s, ACTIONS.DECLARE_BANKRUPTCY, 'p1');
+    // 300 + casas 2×25 + hipotecas 30 + 30 + 100 = 510
+    assert.equal(P(s, 'p2').money, 1500 + 510);
+    for (const i of [1, 3, 5]) {
+      assert.equal(s.ownership[i].ownerId, 'p2');
+      assert.equal(s.ownership[i].mortgaged, true);
+      assert.equal(s.ownership[i].houses, 0);
+    }
+    assert.equal(s.bank.houses, BANK_HOUSES);
+    assert.equal(P(s, 'p2').jailFreeCards.length, 1);
+    assert.equal(s.turn.playerId, 'p2');
+  });
+
+  test('F5 bancarrota ante la banca: propiedades a subasta sin hipoteca y fin de partida', () => {
+    let s = newGame(3);
+    own(s, 1, 'p1', 0, true);
+    s.players[0].position = 36;
+    s.players[0].money = 50;
+    s = act(s, ACTIONS.ROLL_DICE, 'p1', {}, dice(1, 1)); // impuesto de lujo 100
+    s = act(s, ACTIONS.DECLARE_BANKRUPTCY, 'p1');
+    assert.equal(s.auction.kind, 'property');
+    assert.equal(s.auction.index, 1);
+    assert.deepEqual(s.auction.participants, ['p2', 'p3']);
+    s = act(s, ACTIONS.PLACE_BID, 'p3', { amount: 10 });
+    s = act(s, ACTIONS.PASS_BID, 'p2');
+    assert.deepEqual(s.ownership[1], { ownerId: 'p3', houses: 0, mortgaged: false });
+    assert.equal(s.turn.playerId, 'p2');
+    s = act(s, ACTIONS.RESIGN, 'p2');
+    assert.equal(s.phase, 'finished');
+    assert.equal(s.winnerId, 'p3');
+  });
+
+  test('pagos a varios jugadores con deudas simultáneas (presidente del consorcio)', () => {
+    let s = newGame(3);
+    s.players[0].money = 60;
+    s.players[0].position = 4;
+    s.decks.chance = ['c15', ...s.decks.chance.filter((c) => c !== 'c15')];
+    s = act(s, ACTIONS.ROLL_DICE, 'p1', {}, dice(1, 2)); // Fortuna: paga 50 a cada uno
+    assert.equal(P(s, 'p2').money, 1550);
+    assert.equal(s.debts.length, 1);
+    assert.equal(s.debts[0].creditorId, 'p3');
+  });
 });
 
-test('estaciones y servicios', () => {
-  let s = newGame(2);
-  for (const i of [5, 15, 25]) s.ownership[i] = { ownerId: 'p2', houses: 0, mortgaged: false };
-  s.players[0].position = 10;
-  s = act(s, ACTIONS.ROLL_DICE, 'p1', {}, dice(2, 3)); // 15: 3 estaciones → $100
-  assert.equal(P(s, 'p1').money, 1400);
+/* ================================================================== */
 
-  let u = newGame(2);
-  u.ownership[12] = { ownerId: 'p2', houses: 0, mortgaged: false };
-  u.ownership[28] = { ownerId: 'p2', houses: 0, mortgaged: false };
-  u.players[0].position = 10;
-  u = act(u, ACTIONS.ROLL_DICE, 'p1', {}, dice(1, 1)); // 12: 2 servicios → 10 × 2
-  assert.equal(P(u, 'p1').money, 1480);
+describe('G. Cárcel', () => {
+  const jailed = (s, id = 'p1') => {
+    const p = P(s, id);
+    p.status = 'in-jail';
+    p.position = 10;
+  };
+
+  test('G1 entrar por carta', () => {
+    let s = newGame(2);
+    s.players[0].position = 4;
+    s.decks.chance = ['c11', ...s.decks.chance.filter((c) => c !== 'c11')];
+    s = act(s, ACTIONS.ROLL_DICE, 'p1', {}, dice(1, 2));
+    assert.equal(P(s, 'p1').status, 'in-jail');
+    assert.equal(P(s, 'p1').money, 1500); // no cobra la Salida
+  });
+
+  test('G2 pagar $50 al empezar el turno y tirar normalmente', () => {
+    let s = newGame(2);
+    jailed(s);
+    s = act(s, ACTIONS.PAY_JAIL_FINE, 'p1');
+    assert.equal(P(s, 'p1').money, 1450);
+    s = act(s, ACTIONS.ROLL_DICE, 'p1', {}, dice(1, 2));
+    assert.equal(P(s, 'p1').position, 13);
+  });
+
+  test('G3 carta de libertad comprada a otro jugador', () => {
+    let s = newGame(2);
+    jailed(s);
+    s.players[1].jailFreeCards = [{ deck: 'community', cardId: 'v5' }];
+    s.decks.community = s.decks.community.filter((c) => c !== 'v5');
+    s = act(s, ACTIONS.PROPOSE_TRADE, 'p1', { toId: 'p2', give: { money: 40 }, get: { jailCards: 1 } });
+    s = act(s, ACTIONS.RESPOND_TRADE, 'p2', { tradeId: s.trades[0].id, accept: true });
+    s = act(s, ACTIONS.USE_JAIL_CARD, 'p1');
+    assert.equal(P(s, 'p1').status, 'active');
+    assert.equal(s.decks.community.at(-1), 'v5');
+  });
+
+  test('G4 salir con dobles mueve con esa tirada y no da tirada extra', () => {
+    let s = newGame(2);
+    jailed(s);
+    s = act(s, ACTIONS.ROLL_DICE, 'p1', {}, dice(4, 4)); // 18
+    assert.equal(P(s, 'p1').status, 'active');
+    assert.equal(P(s, 'p1').position, 18);
+    s = act(s, ACTIONS.DECLINE_PROPERTY, 'p1');
+    s = act(s, ACTIONS.PASS_BID, 'p1');
+    s = act(s, ACTIONS.PASS_BID, 'p2');
+    assert.equal(s.turn.step, 'end');
+  });
+
+  test('G5 al tercer fallo paga $50 y avanza con esa tirada', () => {
+    let s = newGame(2);
+    jailed(s);
+    P(s, 'p1').jailTurns = 2;
+    s = act(s, ACTIONS.ROLL_DICE, 'p1', {}, dice(1, 2));
+    assert.equal(P(s, 'p1').status, 'active');
+    assert.equal(P(s, 'p1').position, 13);
+    assert.equal(P(s, 'p1').money, 1450);
+  });
+
+  test('G6 estando preso se puede construir, hipotecar y negociar fuera de turno', () => {
+    let s = newGame(2);
+    jailed(s, 'p2');
+    own(s, 1, 'p2');
+    own(s, 3, 'p2');
+    own(s, 39, 'p2');
+    s = act(s, ACTIONS.BUILD, 'p2', { index: 1 });
+    s = act(s, ACTIONS.MORTGAGE, 'p2', { index: 39 });
+    act(s, ACTIONS.PROPOSE_TRADE, 'p2', { toId: 'p1', give: { money: 10 }, get: {} });
+  });
+
+  test('G7 tercer fallo sin efectivo: deuda con la banca', () => {
+    let s = newGame(2);
+    jailed(s);
+    P(s, 'p1').jailTurns = 2;
+    P(s, 'p1').money = 20;
+    own(s, 39, 'p1');
+    s = act(s, ACTIONS.ROLL_DICE, 'p1', {}, dice(1, 2));
+    assert.equal(s.debts[0].amount, 50);
+    assert.equal(s.debts[0].creditorId, null);
+  });
 });
 
-test('cartas: avanzar a la estación más cercana paga el doble', () => {
-  let s = newGame(2);
-  s.ownership[15] = { ownerId: 'p2', houses: 0, mortgaged: false };
-  s.players[0].position = 4;
-  s.decks.chance = ['c5', ...s.decks.chance.filter((c) => c !== 'c5')];
-  s = act(s, ACTIONS.ROLL_DICE, 'p1', {}, dice(1, 2)); // 7 Fortuna → estación 15
-  assert.equal(P(s, 'p1').position, 15);
-  assert.equal(P(s, 'p1').money, 1500 - 50);
+/* ================================================================== */
+
+describe('H. Negociaciones', () => {
+  test('H1 cualquier jugador negocia en cualquier momento y la oferta no detiene el turno', () => {
+    let s = newGame(3);
+    own(s, 5, 'p2');
+    s = act(s, ACTIONS.PROPOSE_TRADE, 'p3', { toId: 'p2', give: { money: 250 }, get: { squares: [5] } });
+    s = act(s, ACTIONS.ROLL_DICE, 'p1', {}, dice(1, 2)); // el turno sigue
+    s = act(s, ACTIONS.RESPOND_TRADE, 'p2', { tradeId: s.trades[0].id, accept: true });
+    assert.equal(s.ownership[5].ownerId, 'p3');
+  });
+
+  test('H1 la oferta se vuelve a validar al aceptarla', () => {
+    let s = newGame(3);
+    own(s, 5, 'p2');
+    s = act(s, ACTIONS.PROPOSE_TRADE, 'p3', { toId: 'p2', give: { money: 1000 }, get: { squares: [5] } });
+    s.players[2].money = 100; // p3 gastó el dinero mientras tanto
+    reject(s, ACTIONS.RESPOND_TRADE, 'p2', { tradeId: s.trades[0].id, accept: true });
+  });
+
+  test('H1 sólo el destinatario responde y sólo el autor retira', () => {
+    let s = newGame(3);
+    s = act(s, ACTIONS.PROPOSE_TRADE, 'p1', { toId: 'p2', give: { money: 10 } });
+    const id = s.trades[0].id;
+    reject(s, ACTIONS.RESPOND_TRADE, 'p3', { tradeId: id, accept: true });
+    reject(s, ACTIONS.CANCEL_TRADE, 'p2', { tradeId: id });
+    s = act(s, ACTIONS.CANCEL_TRADE, 'p1', { tradeId: id });
+    assert.equal(s.trades.length, 0);
+  });
+
+  test('H3 no se negocia una calle con edificios en su grupo', () => {
+    const s = newGame(2);
+    own(s, 1, 'p1', 1);
+    own(s, 3, 'p1');
+    reject(s, ACTIONS.PROPOSE_TRADE, 'p1', { toId: 'p2', give: { squares: [3] } });
+  });
+
+  test('H6 la operación es atómica: aceptar retira otras ofertas sobre las mismas propiedades', () => {
+    let s = newGame(3);
+    own(s, 5, 'p1');
+    s = act(s, ACTIONS.PROPOSE_TRADE, 'p1', { toId: 'p2', give: { squares: [5] }, get: { money: 300 } });
+    s = act(s, ACTIONS.PROPOSE_TRADE, 'p1', { toId: 'p3', give: { squares: [5] }, get: { money: 350 } });
+    s = act(s, ACTIONS.RESPOND_TRADE, 'p3', { tradeId: s.trades[1].id, accept: true });
+    assert.equal(s.trades.length, 0);
+    assert.equal(P(s, 'p1').money, 1850);
+  });
 });
 
-test('carta de cumpleaños cobra a cada jugador y las cartas vuelven al mazo', () => {
-  let s = newGame(3);
-  s.decks.community = ['v9', ...s.decks.community.filter((c) => c !== 'v9')];
-  s = act(s, ACTIONS.ROLL_DICE, 'p1', {}, dice(1, 1)); // 2 Arca Vecinal (dobles)
-  assert.equal(P(s, 'p1').money, 1520);
-  assert.equal(P(s, 'p2').money, 1490);
-  assert.equal(s.decks.community.at(-1), 'v9');
+/* ================================================================== */
+
+describe('I. Cartas', () => {
+  test('I1/I4 los 32 efectos coinciden con la edición de referencia', () => {
+    const fx = (cards) => cards.map((c) => JSON.stringify(c.effect)).sort();
+    const chance = [
+      { kind: 'move-to', index: 39 }, { kind: 'move-to', index: 0 }, { kind: 'move-to', index: 24 },
+      { kind: 'move-to', index: 11 }, { kind: 'move-nearest', type: 'station' }, { kind: 'move-nearest', type: 'station' },
+      { kind: 'move-nearest', type: 'utility' }, { kind: 'collect', amount: 50 }, { kind: 'jail-free' },
+      { kind: 'move-back', steps: 3 }, { kind: 'go-to-jail' }, { kind: 'repairs', house: 25, hotel: 100 },
+      { kind: 'pay', amount: 15 }, { kind: 'move-to', index: 5 }, { kind: 'pay-each', amount: 50 },
+      { kind: 'collect', amount: 150 },
+    ];
+    const community = [
+      { kind: 'move-to', index: 0 }, { kind: 'collect', amount: 200 }, { kind: 'pay', amount: 50 },
+      { kind: 'collect', amount: 50 }, { kind: 'jail-free' }, { kind: 'go-to-jail' },
+      { kind: 'collect', amount: 100 }, { kind: 'collect', amount: 20 }, { kind: 'collect-each', amount: 10 },
+      { kind: 'collect', amount: 100 }, { kind: 'pay', amount: 100 }, { kind: 'pay', amount: 50 },
+      { kind: 'collect', amount: 25 }, { kind: 'repairs', house: 40, hotel: 115 }, { kind: 'collect', amount: 10 },
+      { kind: 'collect', amount: 100 },
+    ];
+    assert.deepEqual(fx(CHANCE_CARDS), chance.map((e) => JSON.stringify(e)).sort());
+    assert.deepEqual(fx(COMMUNITY_CARDS), community.map((e) => JSON.stringify(e)).sort());
+  });
+
+  test('I2 la carta vuelve al fondo del mazo; cumpleaños cobra a cada jugador', () => {
+    let s = newGame(3);
+    s.decks.community = ['v9', ...s.decks.community.filter((c) => c !== 'v9')];
+    s = act(s, ACTIONS.ROLL_DICE, 'p1', {}, dice(1, 1));
+    assert.equal(P(s, 'p1').money, 1520);
+    assert.equal(s.decks.community.at(-1), 'v9');
+  });
+
+  test('I3 la carta de libertad se conserva fuera del mazo', () => {
+    let s = newGame(2);
+    s.decks.community = ['v5', ...s.decks.community.filter((c) => c !== 'v5')];
+    s = act(s, ACTIONS.ROLL_DICE, 'p1', {}, dice(1, 1));
+    assert.equal(P(s, 'p1').jailFreeCards.length, 1);
+    assert.ok(!s.decks.community.includes('v5'));
+  });
+
+  test('I5 reparaciones: $25 por casa y $100 por hotel', () => {
+    let s = newGame(2);
+    own(s, 1, 'p1', 2);
+    own(s, 3, 'p1', HOTEL);
+    s.players[0].position = 4;
+    s.decks.chance = ['c12', ...s.decks.chance.filter((c) => c !== 'c12')];
+    s = act(s, ACTIONS.ROLL_DICE, 'p1', {}, dice(1, 2));
+    assert.equal(P(s, 'p1').money, 1500 - 150);
+  });
+
+  test('I5 retroceder 3 desde Fortuna resuelve la casilla de destino', () => {
+    let s = newGame(2);
+    s.players[0].position = 4;
+    s.decks.chance = ['c10', ...s.decks.chance.filter((c) => c !== 'c10')];
+    s = act(s, ACTIONS.ROLL_DICE, 'p1', {}, dice(1, 2)); // 7 → 4 (impuesto)
+    assert.equal(P(s, 'p1').position, 4);
+    assert.equal(P(s, 'p1').money, 1300);
+  });
 });
 
-test('carta de libertad se guarda, se usa y vuelve al mazo', () => {
-  let s = newGame(2);
-  s.decks.community = ['v5', ...s.decks.community.filter((c) => c !== 'v5')];
-  s = act(s, ACTIONS.ROLL_DICE, 'p1', {}, dice(1, 1));
-  assert.equal(P(s, 'p1').jailFreeCards.length, 1);
-  assert.ok(!s.decks.community.includes('v5'));
-  s.players[0].status = 'in-jail';
-  s.turn.step = 'roll';
-  s = act(s, ACTIONS.USE_JAIL_CARD, 'p1');
-  assert.equal(P(s, 'p1').status, 'active');
-  assert.ok(s.decks.community.includes('v5'));
-});
+/* ================================================================== */
+/* J. Integridad: partidas completas, acciones ilegales y reconstrucción */
+/* ================================================================== */
 
-test('deuda impagable → bancarrota ante otro jugador transfiere los bienes', () => {
-  let s = newGame(3);
-  s.ownership[39] = { ownerId: 'p2', houses: HOTEL, mortgaged: false };
-  s.ownership[37] = { ownerId: 'p2', houses: HOTEL, mortgaged: false };
-  s.ownership[1] = { ownerId: 'p1', houses: 0, mortgaged: true };
-  s.players[0].position = 35;
-  s.players[0].money = 300;
-  s = act(s, ACTIONS.ROLL_DICE, 'p1', {}, dice(1, 3)); // 39, alquiler 2000
-  assert.equal(s.debts.length, 1);
-  assert.equal(getActingPlayerId(s), 'p1');
-  assert.equal(applyAction(s, { type: ACTIONS.END_TURN, playerId: 'p1' }).ok, false);
-  assert.equal(applyAction(s, { type: ACTIONS.PAY_DEBT, playerId: 'p1' }).ok, false);
-  s = act(s, ACTIONS.DECLARE_BANKRUPTCY, 'p1');
-  assert.equal(P(s, 'p1').status, 'bankrupt');
-  assert.equal(s.ownership[1].ownerId, 'p2');
-  assert.equal(P(s, 'p2').money, 1500 + 300 - 3); // menos 10 % de interés de la hipoteca
-  assert.equal(s.turn.playerId, 'p2');
-});
+function chooseAction(s, rng) {
+  const deciders = getPendingDeciders(s);
+  const id = deciders[Math.floor(rng() * deciders.length)];
+  const p = P(s, id);
 
-test('bancarrota ante la banca: las propiedades se subastan y se detecta ganador', () => {
-  let s = newGame(2);
-  s.ownership[1] = { ownerId: 'p1', houses: 0, mortgaged: false };
-  s.players[0].position = 36;
-  s.players[0].money = 80;
-  s = act(s, ACTIONS.ROLL_DICE, 'p1', {}, dice(1, 1)); // 38 impuesto de lujo, dobles
-  assert.equal(s.debts.length, 1);
-  s = act(s, ACTIONS.MORTGAGE, 'p1', { index: 1 });
-  s = act(s, ACTIONS.PAY_DEBT, 'p1');
-  assert.equal(P(s, 'p1').money, 10);
-  s = act(s, ACTIONS.RESIGN, 'p1');
-  assert.equal(s.phase, 'finished');
-  assert.equal(s.winnerId, 'p2');
-});
-
-test('negociar una propiedad hipotecada cobra el 10 % al receptor', () => {
-  let s = newGame(2);
-  s.ownership[39] = { ownerId: 'p1', houses: 0, mortgaged: true };
-  s = act(s, ACTIONS.PROPOSE_TRADE, 'p1', { toId: 'p2', give: { squares: [39] }, get: { money: 100 } });
-  assert.equal(getActingPlayerId(s), 'p2');
-  s = act(s, ACTIONS.RESPOND_TRADE, 'p2', { accept: true });
-  assert.equal(s.ownership[39].ownerId, 'p2');
-  assert.equal(P(s, 'p2').money, 1500 - 100 - 20);
-  // levantarla en el mismo turno cuesta sólo el valor de la hipoteca
-  s.turn.playerId = 'p2';
-  s = act(s, ACTIONS.UNMORTGAGE, 'p2', { index: 39 });
-  assert.equal(P(s, 'p2').money, 1380 - 200);
-});
-
-test('no se negocia una propiedad con edificios en su grupo', () => {
-  const s = newGame(2);
-  s.ownership[1] = { ownerId: 'p1', houses: 1, mortgaged: false };
-  s.ownership[3] = { ownerId: 'p1', houses: 0, mortgaged: false };
-  const r = applyAction(s, { type: ACTIONS.PROPOSE_TRADE, playerId: 'p1', payload: { toId: 'p2', give: { squares: [3] } } });
-  assert.equal(r.ok, false);
-});
-
-/* ---------- partidas aleatorias completas: invariantes ---------- */
-
-function botAction(s, rng) {
-  const id = getActingPlayerId(s);
-  const p = s.players.find((x) => x.id === id);
   if (s.debts.length) {
-    if (p.money >= s.debts[0].amount) return { type: ACTIONS.PAY_DEBT };
-    for (const sq of BOARD) {
-      const own = s.ownership[sq.index];
-      if (own?.ownerId === id && own.houses && !sellBlocker(s, id, sq.index))
-        return { type: ACTIONS.SELL_BUILDING, payload: { index: sq.index } };
-    }
-    for (const sq of BOARD) {
-      const own = s.ownership[sq.index];
-      if (own?.ownerId === id && !own.mortgaged) return { type: ACTIONS.MORTGAGE, payload: { index: sq.index } };
-    }
-    return { type: ACTIONS.DECLARE_BANKRUPTCY };
+    const d = s.debts.find((x) => x.debtorId === id);
+    if (p.money >= d.amount) return { playerId: id, type: ACTIONS.PAY_DEBT };
+    for (const sq of BOARD) if (s.ownership[sq.index]?.ownerId === id && !sellBlocker(s, id, sq.index)) return { playerId: id, type: ACTIONS.SELL_BUILDING, payload: { index: sq.index } };
+    for (const sq of BOARD) if (!mortgageBlocker(s, id, sq.index)) return { playerId: id, type: ACTIONS.MORTGAGE, payload: { index: sq.index } };
+    return { playerId: id, type: ACTIONS.DECLARE_BANKRUPTCY };
   }
+  if (s.placement) return { playerId: id, type: ACTIONS.PLACE_BUILDING, payload: { index: legalPlacements(s, id, s.placement.buildingType)[0] } };
+  if (s.buildingClaim) return { playerId: id, type: ACTIONS.CLAIM_BUILDING, payload: { want: rng() < 0.5 } };
   if (s.auction) {
-    const bid = s.auction.highBid + 10 + Math.floor(rng() * 40);
-    return bid <= p.money && rng() < 0.5 ? { type: ACTIONS.PLACE_BID, payload: { amount: bid } } : { type: ACTIONS.PASS_BID };
+    const bid = Math.max(10, s.auction.highBid + 1 + Math.floor(rng() * 30));
+    return bid <= p.money && rng() < 0.45 ? { playerId: id, type: ACTIONS.PLACE_BID, payload: { amount: bid } } : { playerId: id, type: ACTIONS.PASS_BID };
   }
-  if (s.trade) return { type: ACTIONS.RESPOND_TRADE, payload: { accept: rng() < 0.5 } };
-  if (s.turn.step === 'buy') return rng() < 0.75 && p.money >= BOARD[s.pendingPurchase].price ? { type: ACTIONS.BUY_PROPERTY } : { type: ACTIONS.DECLINE_PROPERTY };
-  if (s.turn.step === 'roll') {
-    if (p.status === 'in-jail' && p.money > 200 && rng() < 0.5) return { type: ACTIONS.PAY_JAIL_FINE };
-    return { type: ACTIONS.ROLL_DICE };
-  }
-  // fin de turno: intentar construir o negociar a veces
+  // Acciones libres de cualquier jugador, a veces
   const r = rng();
-  if (r < 0.3) {
-    const idx = Math.floor(rng() * 40);
-    return { type: ACTIONS.BUILD, payload: { index: idx } };
+  const alive = s.players.filter((x) => x.status !== 'bankrupt');
+  const any = alive[Math.floor(rng() * alive.length)];
+  if (r < 0.15) {
+    // construir donde sea legal (acelera las quiebras), o intentarlo en una casilla al azar
+    const legal = BOARD.filter((sq) => !buildBlocker(s, any.id, sq.index)).map((sq) => sq.index);
+    const index = legal.length && rng() < 0.8 ? legal[0] : Math.floor(rng() * 40);
+    return { playerId: any.id, type: ACTIONS.BUILD, payload: { index } };
   }
-  if (r < 0.35) {
-    const mine = BOARD.filter((sq) => s.ownership[sq.index]?.ownerId === id).map((sq) => sq.index);
-    const other = s.players.find((x) => x.id !== id && x.status !== 'bankrupt');
-    if (mine.length && other) return { type: ACTIONS.PROPOSE_TRADE, payload: { toId: other.id, give: { squares: [mine[0]] }, get: { money: 50 } } };
+  if (r < 0.16) return { playerId: any.id, type: ACTIONS.MORTGAGE, payload: { index: Math.floor(rng() * 40) } };
+  if (r < 0.17) return { playerId: any.id, type: ACTIONS.UNMORTGAGE, payload: { index: Math.floor(rng() * 40) } };
+  if (r < 0.18) return { playerId: any.id, type: ACTIONS.SELL_BUILDING, payload: { index: Math.floor(rng() * 40) } };
+  if (r < 0.2) {
+    const mine = BOARD.filter((sq) => s.ownership[sq.index]?.ownerId === any.id).map((sq) => sq.index);
+    const other = alive.find((x) => x.id !== any.id);
+    if (mine.length && other) return { playerId: any.id, type: ACTIONS.PROPOSE_TRADE, payload: { toId: other.id, give: { squares: [mine[0]] }, get: { money: 40 } } };
   }
-  return { type: ACTIONS.END_TURN };
+  if (r < 0.23 && s.trades.length) {
+    const t = s.trades[0];
+    return { playerId: t.toId, type: ACTIONS.RESPOND_TRADE, payload: { tradeId: t.id, accept: rng() < 0.5 } };
+  }
+  const cur = P(s, s.turn.playerId);
+  if (s.turn.step === 'buy') return { playerId: cur.id, type: rng() < 0.9 && cur.money >= BOARD[s.pendingPurchase].price ? ACTIONS.BUY_PROPERTY : ACTIONS.DECLINE_PROPERTY };
+  if (s.turn.step === 'roll') {
+    if (cur.status === 'in-jail' && cur.money > 200 && rng() < 0.5) return { playerId: cur.id, type: ACTIONS.PAY_JAIL_FINE };
+    return { playerId: cur.id, type: ACTIONS.ROLL_DICE };
+  }
+  return { playerId: cur.id, type: ACTIONS.END_TURN };
 }
 
-test('80 partidas aleatorias mantienen los invariantes', () => {
-  for (let g = 0; g < 80; g++) {
-    const rng = seeded(1000 + g);
-    const n = 2 + (g % 7);
-    let s = createGameState({
-      players: Array.from({ length: n }, (_, i) => ({ id: `p${i}`, name: `J${i}`, colorId: 'violet', tokenId: 'star' })),
-      rng,
-    });
-    for (let step = 0; step < 3000 && s.phase === 'playing'; step++) {
-      const a = botAction(s, rng);
-      const r = applyAction(s, { ...a, playerId: getActingPlayerId(s) }, rng);
-      if (!r.ok) {
-        if (a.type === ACTIONS.BUILD || a.type === ACTIONS.PROPOSE_TRADE) {
-          s = applyAction(s, { type: ACTIONS.END_TURN, playerId: getActingPlayerId(s) }, rng).state ?? s;
-          continue;
-        }
-        assert.fail(`Acción del bot rechazada (${a.type}): ${r.error}`);
-      }
-      s = r.state;
-      // invariantes
-      for (const p of s.players) assert.ok(p.money >= 0, `dinero negativo: ${p.name} ${p.money}`);
-      let houses = 0;
-      let hotels = 0;
-      for (const own of Object.values(s.ownership)) {
-        if (own.houses === HOTEL) hotels++;
-        else houses += own.houses;
-        assert.notEqual(s.players.find((p) => p.id === own.ownerId).status, 'bankrupt');
-      }
-      assert.equal(houses + s.bank.houses, BANK_HOUSES);
-      assert.equal(hotels + s.bank.hotels, BANK_HOTELS);
-      const cards = s.decks.chance.length + s.decks.community.length + s.players.reduce((t, p) => t + p.jailFreeCards.length, 0);
-      assert.equal(cards, 32);
-      if (s.debts.length) assert.ok(liquidationValue(s, s.debts[0].debtorId) >= 0);
-    }
+function checkInvariants(s) {
+  for (const p of s.players) assert.ok(p.money >= 0, `dinero negativo: ${p.name} ${p.money}`);
+  let houses = 0;
+  let hotels = 0;
+  for (const o of Object.values(s.ownership)) {
+    if (o.houses === HOTEL) hotels++;
+    else houses += o.houses;
+    assert.notEqual(P(s, o.ownerId).status, 'bankrupt', 'un eliminado conserva propiedades');
+    if (o.mortgaged) assert.equal(o.houses, 0, 'hipotecada con edificios');
   }
+  if (s.placement) s.placement.buildingType === 'hotel' ? hotels++ : houses++;
+  assert.equal(houses + s.bank.houses, BANK_HOUSES, 'casas');
+  assert.equal(hotels + s.bank.hotels, BANK_HOTELS, 'hoteles');
+  const cards = s.decks.chance.length + s.decks.community.length + s.players.reduce((t, p) => t + p.jailFreeCards.length, 0);
+  assert.equal(cards, 32, 'cartas');
+}
+
+/** rng que graba sus valores para reproducir la partida. */
+function recordingRng(seed) {
+  const base = seeded(seed);
+  const values = [];
+  const rng = () => {
+    const v = base();
+    values.push(v);
+    return v;
+  };
+  return { rng, values };
+}
+const replayRng = (values) => {
+  let i = 0;
+  return () => values[i++];
+};
+
+describe('J. Integridad', () => {
+  test('J1 60 partidas aleatorias completas (2–8 jugadores) terminan y respetan los invariantes', () => {
+    let finished = 0;
+    for (let g = 0; g < 60; g++) {
+      const rng = seeded(1000 + g);
+      let s = createGameState({ players: mkPlayers(2 + (g % 7)), rng });
+      for (let step = 0; step < 12000 && s.phase === 'playing'; step++) {
+        const a = chooseAction(s, rng);
+        const r = applyAction(s, a, rng);
+        if (r.ok) s = r.state;
+        checkInvariants(s);
+      }
+      if (s.phase === 'finished') finished++;
+    }
+    assert.ok(finished >= 30, `sólo terminaron ${finished} de 60 partidas`);
+    console.log(`  partidas aleatorias terminadas: ${finished}/60`);
+  });
+
+  test('J1 el motor rechaza acciones ilegales enviadas por cualquier jugador sin alterar el estado', () => {
+    const rng = seeded(5);
+    let s = createGameState({ players: mkPlayers(4), rng });
+    const types = Object.values(ACTIONS);
+    for (let k = 0; k < 4000 && s.phase === 'playing'; k++) {
+      const before = JSON.stringify(s);
+      const junk = {
+        type: types[Math.floor(rng() * types.length)],
+        playerId: s.players[Math.floor(rng() * 4)].id,
+        payload: { index: Math.floor(rng() * 45) - 2, amount: Math.floor(rng() * 3000) - 100, toId: 'p2', tradeId: 'x', want: true, give: { money: -5 } },
+      };
+      const r = applyAction(s, junk, rng);
+      if (!r.ok) assert.equal(JSON.stringify(s), before, 'una acción rechazada modificó el estado');
+      else {
+        s = r.state;
+        checkInvariants(s);
+      }
+      if (k % 3 === 0) {
+        const a = applyAction(s, chooseAction(s, rng), rng);
+        if (a.ok) s = a.state;
+      }
+    }
+    reject(s, ACTIONS.ROLL_DICE, 'nadie');
+  });
+
+  test('J2 reconstrucción: misma configuración + mismas acciones + mismos valores de azar → mismo estado', () => {
+    const { rng, values } = recordingRng(77);
+    const players = mkPlayers(5);
+    const initial = createGameState({ players, rng });
+    const startValues = values.length;
+    let s = initial;
+    const actions = [];
+    const pick = seeded(3);
+    for (let k = 0; k < 1500 && s.phase === 'playing'; k++) {
+      const a = chooseAction(s, pick);
+      const r = applyAction(s, a, rng);
+      if (r.ok) {
+        actions.push(a);
+        s = r.state;
+      }
+    }
+    // Reproducir desde cero
+    const rr = replayRng(values);
+    let t = createGameState({ players, rng: rr });
+    assert.equal(values.length >= startValues, true);
+    for (const a of actions) {
+      const r = applyAction(t, a, rr);
+      assert.ok(r.ok, r.error);
+      t = r.state;
+    }
+    assert.deepEqual(t, s);
+  });
+
+  test('J2 el estado sobrevive a serializar y continuar la partida', () => {
+    let s = newGame(3);
+    s = act(s, ACTIONS.ROLL_DICE, 'p1', {}, dice(2, 3));
+    const restored = JSON.parse(JSON.stringify(s));
+    const a = applyAction(s, { type: ACTIONS.BUY_PROPERTY, playerId: 'p1' });
+    const b = applyAction(restored, { type: ACTIONS.BUY_PROPERTY, playerId: 'p1' });
+    assert.deepEqual(a.state, b.state);
+  });
 });

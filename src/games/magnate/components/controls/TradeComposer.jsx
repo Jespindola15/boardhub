@@ -10,10 +10,12 @@ import { formatMoney } from '../format.js';
 
 const emptyOffer = () => ({ money: 0, squares: [], jailCards: 0 });
 
-/** Ventana para que el jugador del turno proponga un trato a otro jugador. */
+/** Ventana para proponer un trato. G0009: cualquier jugador negocia con cualquiera en cualquier momento. */
 export default function TradeComposer({ state, send, onClose }) {
-  const me = getCurrentPlayer(state);
-  const others = state.players.filter((p) => p.id !== me.id && p.status !== 'bankrupt');
+  const alive = state.players.filter((p) => p.status !== 'bankrupt');
+  const [fromId, setFromId] = useState(getCurrentPlayer(state).id);
+  const me = alive.find((p) => p.id === fromId) ?? alive[0];
+  const others = alive.filter((p) => p.id !== me.id);
   const [toId, setToId] = useState(others[0]?.id);
   const [give, setGive] = useState(emptyOffer);
   const [get, setGet] = useState(emptyOffer);
@@ -23,6 +25,12 @@ export default function TradeComposer({ state, send, onClose }) {
     setToId(id);
     setGet(emptyOffer());
   };
+  const changeProposer = (id) => {
+    setFromId(id);
+    setGive(emptyOffer());
+    setGet(emptyOffer());
+    setToId(alive.find((p) => p.id !== id)?.id);
+  };
 
   const empty = useMemo(
     () => !give.money && !give.squares.length && !give.jailCards && !get.money && !get.squares.length && !get.jailCards,
@@ -30,7 +38,7 @@ export default function TradeComposer({ state, send, onClose }) {
   );
 
   const submit = () => {
-    send(ACTIONS.PROPOSE_TRADE, { toId, give, get });
+    send(ACTIONS.PROPOSE_TRADE, { toId, give, get }, me.id);
     onClose();
   };
 
@@ -41,7 +49,7 @@ export default function TradeComposer({ state, send, onClose }) {
       width={820}
       footer={
         <>
-          <span className="trade__note">El otro jugador decidirá en el centro del tablero.</span>
+          <span className="trade__note">La oferta queda abierta en el panel izquierdo hasta que la acepten, rechacen o retires.</span>
           <Button onClick={onClose}>Cancelar</Button>
           <Button variant="primary" disabled={empty || !other} onClick={submit}>
             Proponer trato
@@ -50,7 +58,15 @@ export default function TradeComposer({ state, send, onClose }) {
       }
     >
       <div className="trade__targets">
-        <span>Negociar con:</span>
+        <span>Propone:</span>
+        {alive.map((p) => (
+          <button key={p.id} type="button" className={`trade__target ${p.id === me.id ? 'is-active' : ''}`} onClick={() => changeProposer(p.id)}>
+            <Token player={p} className="token--tiny" /> {p.name}
+          </button>
+        ))}
+      </div>
+      <div className="trade__targets">
+        <span>Con:</span>
         {others.map((p) => (
           <button key={p.id} type="button" className={`trade__target ${p.id === toId ? 'is-active' : ''}`} onClick={() => changeTarget(p.id)}>
             <Token player={p} className="token--tiny" /> {p.name}

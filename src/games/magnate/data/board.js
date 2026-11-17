@@ -7,8 +7,9 @@
  *    estado de partida (state/), nunca aquí.
  *  - El orden del array = índice de casilla = recorrido en sentido de juego,
  *    empezando en Salida (0).
- *  - Las cifras siguen la estructura clásica. Quedan como valores provisionales
- *    hasta cerrar el reglamento oficial de Magnate (ver docs/PENDIENTES.md).
+ *  - Precios, alquileres, costes de edificios e hipotecas: los de la edición G0009.
+ *
+ * Edición de referencia: Hasbro G0009 (docs/reglas/magnate/EDICION.md).
  *
  * rent (propiedades): [sin casas, 1 casa, 2, 3, 4, hotel]
  * rent (estaciones):  [1 estación, 2, 3, 4]
@@ -36,6 +37,11 @@ export const GO_SALARY = 200;
 
 const T = SQUARE_TYPES;
 
+/** Coste de levantar la hipoteca impreso en la ficha: hipoteca + 10 %, redondeado hacia arriba. */
+function unmortgageOf(mortgage) {
+  return mortgage + Math.ceil(mortgage / 10);
+}
+
 const property = (name, group, price, rent) => ({
   type: T.PROPERTY,
   name,
@@ -44,6 +50,7 @@ const property = (name, group, price, rent) => ({
   rent,
   houseCost: COLOR_GROUPS[group].houseCost,
   mortgage: price / 2,
+  unmortgage: unmortgageOf(price / 2),
 });
 
 const station = (name) => ({
@@ -53,6 +60,7 @@ const station = (name) => ({
   price: 200,
   rent: [25, 50, 100, 200],
   mortgage: 100,
+  unmortgage: 110,
 });
 
 const utility = (name, icon) => ({
@@ -63,6 +71,7 @@ const utility = (name, icon) => ({
   price: 150,
   multipliers: [4, 10],
   mortgage: 75,
+  unmortgage: 83,
 });
 
 const RAW_SQUARES = [

@@ -11,6 +11,8 @@ export const ACTIONS = {
   PLACE_BID: 'PLACE_BID',
   PASS_BID: 'PASS_BID',
   BUILD: 'BUILD',
+  CLAIM_BUILDING: 'CLAIM_BUILDING', // escasez: ¿también quieres el edificio?
+  PLACE_BUILDING: 'PLACE_BUILDING', // colocar el edificio ganado en subasta
   SELL_BUILDING: 'SELL_BUILDING',
   MORTGAGE: 'MORTGAGE',
   UNMORTGAGE: 'UNMORTGAGE',

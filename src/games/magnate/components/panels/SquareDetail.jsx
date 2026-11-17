@@ -112,8 +112,9 @@ function PropertyBody({ square }) {
         <div><dt>Precio</dt><dd>{formatMoney(square.price)}</dd></div>
         <div><dt>Casa / hotel</dt><dd>{formatMoney(square.houseCost)}</dd></div>
         <div><dt>Hipoteca</dt><dd>{formatMoney(square.mortgage)}</dd></div>
+        <div><dt>Levantarla</dt><dd>{formatMoney(square.unmortgage)}</dd></div>
       </dl>
-      <p className="deed__note">Grupo de {groupSize} propiedades. Con el grupo completo y sin edificar, el alquiler se duplica.</p>
+      <p className="deed__note">Grupo de {groupSize} propiedades. Con el grupo completo y sin edificar, el alquiler se duplica (también si otra calle del grupo está hipotecada).</p>
     </>
   );
 }
@@ -144,8 +145,8 @@ function UtilityBody({ square }) {
     <>
       <table className="deed__table">
         <tbody>
-          <tr className="is-base"><td>Con 1 servicio</td><td>{square.multipliers[0]} × dados</td></tr>
-          <tr><td>Con 2 servicios</td><td>{square.multipliers[1]} × dados</td></tr>
+          <tr className="is-base"><td>Con 1 servicio</td><td>{square.multipliers[0]} × tirada nueva</td></tr>
+          <tr><td>Con 2 servicios</td><td>{square.multipliers[1]} × tirada nueva</td></tr>
         </tbody>
       </table>
       <dl className="deed__facts">
@@ -156,29 +157,22 @@ function UtilityBody({ square }) {
   );
 }
 
-/** ¿Quién puede gestionar sus propiedades ahora mismo? */
-function managerOf(state) {
-  if (state.phase !== 'playing') return { id: null };
-  if (state.debts.length) return { id: state.debts[0].debtorId, debt: true };
-  if (state.auction || state.trade) return { id: null };
-  return { id: state.turn.playerId, debt: false };
-}
-
+/**
+ * Gestión de la propiedad por su dueño. G0009 permite construir, vender e hipotecar
+ * en cualquier momento, también fuera del propio turno. El motor valida cada acción.
+ */
 function ManageActions({ state, square, ownership, owner, send }) {
-  const manager = managerOf(state);
-  if (manager.id !== owner.id) {
-    return <p className="deed__manage-note">Sólo {owner.name} puede gestionarla, durante su turno.</p>;
-  }
+  if (state.phase !== 'playing') return null;
   const build = square.type === 'property' ? buildBlocker(state, owner.id, square.index) : 'No se construye aquí.';
   const sell = square.type === 'property' ? sellBlocker(state, owner.id, square.index) : 'No hay edificios.';
   const mort = mortgageBlocker(state, owner.id, square.index);
   const unmort = unmortgageBlocker(state, owner.id, square.index);
-  const act = (type) => send(type, { index: square.index });
-  const upCost = ownership.feePaid ? square.mortgage : unmortgageCost(square);
+  const act = (type) => send(type, { index: square.index }, owner.id);
 
   return (
     <div className="deed__manage">
-      {square.type === 'property' && !manager.debt && (
+      <span className="deed__manage-who">Gestiona {owner.name}</span>
+      {square.type === 'property' && (
         <Button size="sm" onClick={() => act(ACTIONS.BUILD)} disabled={Boolean(build)} title={build ?? ''}>
           {ownership.houses === 4 ? 'Construir hotel' : 'Construir casa'} · {formatMoney(square.houseCost)}
         </Button>
@@ -193,12 +187,11 @@ function ManageActions({ state, square, ownership, owner, send }) {
           Hipotecar · +{formatMoney(square.mortgage)}
         </Button>
       ) : (
-        !manager.debt && (
-          <Button size="sm" onClick={() => act(ACTIONS.UNMORTGAGE)} disabled={Boolean(unmort)} title={unmort ?? ''}>
-            Levantar hipoteca · {formatMoney(upCost)}
-          </Button>
-        )
+        <Button size="sm" onClick={() => act(ACTIONS.UNMORTGAGE)} disabled={Boolean(unmort)} title={unmort ?? ''}>
+          Levantar hipoteca · {formatMoney(unmortgageCost(square))}
+        </Button>
       )}
+      {(build || sell || mort) && <span className="deed__manage-why">{square.type === 'property' && build ? build : ''}</span>}
     </div>
   );
 }

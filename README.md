@@ -4,7 +4,7 @@ Plataforma de juegos de mesa multijugador en el navegador.
 
 | Juego | Estado | Reglamento |
 |---|---|---|
-| **Magnate** (compra y alquiler de propiedades) | Jugable en una misma PC, reglas clásicas completas | [docs/REGLAMENTO_MAGNATE.md](docs/REGLAMENTO_MAGNATE.md) |
+| **Magnate** (Monopoly, edición Hasbro G0009) | Jugable en una misma PC, auditado frente al reglamento oficial | [docs/reglas/magnate/](docs/reglas/magnate/) |
 | **Comodín** (descarte por colores) | Jugable en una misma PC, reglas clásicas completas | [docs/REGLAMENTO_COMODIN.md](docs/REGLAMENTO_COMODIN.md) |
 | Conquista (estrategia territorial), Colonos (colonización y comercio), Ludo | Próximamente | — |
 

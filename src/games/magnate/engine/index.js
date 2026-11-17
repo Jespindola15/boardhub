@@ -1,14 +1,21 @@
 /**
- * Motor de reglas de Magnate (reglas clásicas completas).
+ * Motor de reglas de Magnate — edición de referencia Hasbro G0009.
  *
  *   applyAction(state, action, rng?) -> { ok: true, state } | { ok: false, error }
  *
  *  - Puro respecto a la entrada: clona el estado y devuelve uno nuevo.
- *  - `rng` (() => [0,1)) se inyecta para que el servidor controle el azar y
- *    los tests sean reproducibles.
- *  - Sin React, DOM ni red: lo ejecutarán igual el navegador y el servidor.
+ *  - Toda la aleatoriedad sale de `rng` (() => [0,1)), que en el online pone el servidor.
+ *  - Sin React, DOM ni red.
  *
- * Reglamento: docs/REGLAMENTO_MAGNATE.md
+ * Tipos de acción:
+ *  - De TURNO (sólo el jugador del turno y sin interrupciones pendientes):
+ *      ROLL_DICE, PAY_JAIL_FINE, USE_JAIL_CARD, BUY_PROPERTY, DECLINE_PROPERTY, END_TURN
+ *  - LIBRES (cualquier jugador en juego, en cualquier momento — G0009 BUILDINGS y DEALS & TRADES):
+ *      BUILD, SELL_BUILDING, MORTGAGE, UNMORTGAGE, PROPOSE_TRADE, RESPOND_TRADE, CANCEL_TRADE, RESIGN
+ *  - De INTERRUPCIÓN (quien corresponda):
+ *      PAY_DEBT, DECLARE_BANKRUPTCY, PLACE_BID, PASS_BID, CLAIM_BUILDING, PLACE_BUILDING
+ *
+ * Especificación: docs/reglas/magnate/ESPECIFICACION.md
  */
 import { ACTIONS } from './actionTypes.js';
 import { BOARD, SQUARE_TYPES, BOARD_SIZE, JAIL_INDEX, GO_SALARY, isOwnable } from '../data/board.js';
@@ -18,14 +25,18 @@ import { PLAYER_STATUS } from '../models/player.js';
 import {
   JAIL_FINE,
   MAX_JAIL_TURNS,
+  AUCTION_MIN_BID,
+  HOUSES_PER_HOTEL,
   computeRent,
   buildBlocker,
   sellBlocker,
   mortgageBlocker,
   unmortgageBlocker,
-  unmortgageCost,
-  mortgageFee,
   tradeBlocker,
+  maxRaisable,
+  sellOneBuilding,
+  nextBuildingType,
+  totalDebt,
 } from './rules.js';
 
 export { ACTIONS };
@@ -42,12 +53,11 @@ const check = (cond, message) => {
 export function applyAction(state, action, rng = Math.random) {
   try {
     if (state.phase !== 'playing') fail('La partida ha terminado.');
-    const s = structuredClone(state);
     const handler = HANDLERS[action?.type];
     if (!handler) fail(`Acción desconocida: ${action?.type}`);
+    const s = structuredClone(state);
     const actor = player(s, action.playerId);
     check(actor && actor.status !== PLAYER_STATUS.BANKRUPT, 'Jugador no válido.');
-    checkInterrupts(s, action);
     handler(s, actor, action.payload ?? {}, rng);
     settle(s);
     s.version += 1;
@@ -59,35 +69,36 @@ export function applyAction(state, action, rng = Math.random) {
 }
 
 /* ------------------------------------------------------------------ */
-/* Quién puede actuar ahora                                            */
+/* Permisos                                                            */
 /* ------------------------------------------------------------------ */
 
-const DEBT_ACTIONS = new Set([ACTIONS.PAY_DEBT, ACTIONS.DECLARE_BANKRUPTCY, ACTIONS.SELL_BUILDING, ACTIONS.MORTGAGE]);
-const AUCTION_ACTIONS = new Set([ACTIONS.PLACE_BID, ACTIONS.PASS_BID]);
-const TRADE_ACTIONS = new Set([ACTIONS.RESPOND_TRADE, ACTIONS.CANCEL_TRADE]);
-
-function checkInterrupts(s, action) {
-  if (s.debts.length) {
-    check(DEBT_ACTIONS.has(action.type), 'Primero hay que saldar la deuda pendiente.');
-    check(action.playerId === s.debts[0].debtorId, 'Sólo el jugador endeudado puede actuar ahora.');
-    return;
-  }
-  check(action.type !== ACTIONS.PAY_DEBT, 'No hay deudas pendientes.');
-  if (s.auction) {
-    check(AUCTION_ACTIONS.has(action.type), 'Hay una subasta en curso.');
-    return;
-  }
-  check(!AUCTION_ACTIONS.has(action.type), 'No hay ninguna subasta en curso.');
-  if (s.trade) {
-    check(TRADE_ACTIONS.has(action.type), 'Hay una negociación esperando respuesta.');
-    return;
-  }
-  check(!TRADE_ACTIONS.has(action.type), 'No hay ninguna negociación abierta.');
-  check(action.playerId === s.turn.playerId, 'No es tu turno.');
+/** Interrupción que detiene el turno, si la hay. */
+export function blockingInterrupt(s) {
+  if (s.debts.length) return 'debt';
+  if (s.placement) return 'placement';
+  if (s.buildingClaim) return 'claim';
+  if (s.auction) return 'auction';
+  return null;
 }
 
-/** Acciones de jugador "actual" que sólo valen en un paso concreto. */
-const requireStep = (s, step) => check(s.turn.step === step, 'Esa acción no corresponde en este momento.');
+function requireTurnAction(s, p, step) {
+  const b = blockingInterrupt(s);
+  check(!b, MESSAGES_BLOCK[b]);
+  check(p.id === s.turn.playerId, 'No es tu turno.');
+  check(s.turn.step === step, 'Esa acción no corresponde en este momento.');
+}
+
+const MESSAGES_BLOCK = {
+  debt: 'Hay una deuda pendiente: el turno sigue cuando se resuelva.',
+  placement: 'Hay que colocar el edificio ganado en la subasta.',
+  claim: 'Hay una solicitud de edificios en escasez pendiente.',
+  auction: 'Hay una subasta en curso.',
+};
+
+/** Acciones libres: el jugador que debe colocar un edificio no puede hacer otra cosa antes. */
+function requireFree(s, p) {
+  check(!(s.placement && s.placement.playerId === p.id), 'Primero coloca el edificio que ganaste.');
+}
 
 /* ------------------------------------------------------------------ */
 /* Utilidades                                                          */
@@ -99,43 +110,34 @@ const money = (n) => `$${n}`;
 
 function log(s, text) {
   s.log.push({ id: `l${s.seq++}`, text });
-  if (s.log.length > 80) s.log.splice(0, s.log.length - 80);
+  if (s.log.length > 120) s.log.splice(0, s.log.length - 120);
 }
 
 const rollDie = (rng) => 1 + Math.floor(rng() * 6);
 
-/**
- * Cobra `amount` de `debtor`. Si no tiene efectivo suficiente se registra
- * una deuda que deberá resolver (vendiendo, hipotecando o declarando bancarrota).
- */
+/** Cobra `amount`. Si no hay efectivo suficiente, registra una deuda. Devuelve true si pagó. */
 function charge(s, debtor, creditorId, amount, reason) {
   if (amount <= 0) return true;
   if (debtor.money >= amount) {
     debtor.money -= amount;
     if (creditorId) player(s, creditorId).money += amount;
+    const to = creditorId ? player(s, creditorId).name : 'la banca';
+    log(s, `${debtor.name} paga ${money(amount)} a ${to} (${reason}).`);
     return true;
   }
-  s.debts.push({ debtorId: debtor.id, creditorId, amount, reason });
+  s.debts.push({ id: `d${s.seq++}`, debtorId: debtor.id, creditorId, amount, reason });
   const to = creditorId ? player(s, creditorId).name : 'la banca';
   log(s, `${debtor.name} debe ${money(amount)} a ${to} (${reason}) y no tiene efectivo suficiente.`);
   return false;
-}
-
-/** Igual que charge, pero deja constancia del pago en el registro. */
-function pay(s, debtor, creditorId, amount, reason) {
-  if (charge(s, debtor, creditorId, amount, reason) && amount > 0) {
-    const to = creditorId ? player(s, creditorId).name : 'la banca';
-    log(s, `${debtor.name} paga ${money(amount)} a ${to} (${reason}).`);
-  }
 }
 
 function sendToJail(s, p) {
   p.position = JAIL_INDEX;
   p.status = PLAYER_STATUS.IN_JAIL;
   p.jailTurns = 0;
-  s.turn.doublesInRow = 0;
-  s.turn.extraRoll = false;
   if (s.turn.playerId === p.id) {
+    s.turn.doublesInRow = 0;
+    s.turn.extraRoll = false;
     s.turn.step = TURN_STEPS.END;
     s.pendingPurchase = null;
   }
@@ -147,26 +149,24 @@ function releaseFromJail(p) {
   p.jailTurns = 0;
 }
 
-/** Avanza `steps` casillas cobrando Salida si corresponde. */
-function moveBy(s, p, steps) {
-  const target = (p.position + steps) % BOARD_SIZE;
-  if (p.position + steps >= BOARD_SIZE) collectGo(s, p);
-  p.position = target;
-}
-
-/** Avanza hasta `index` en sentido de juego (cobrando Salida si la pasa). */
-function advanceTo(s, p, index) {
-  if (index <= p.position) collectGo(s, p);
-  p.position = index;
-}
-
 function collectGo(s, p) {
   p.money += GO_SALARY;
   log(s, `${p.name} pasa por la Salida y cobra ${money(GO_SALARY)}.`);
 }
 
+function moveBy(s, p, steps) {
+  if (p.position + steps >= BOARD_SIZE) collectGo(s, p);
+  p.position = (p.position + steps) % BOARD_SIZE;
+}
+
+/** Avanza hasta `index` en sentido de juego (cobra la Salida si la pasa o cae en ella). */
+function advanceTo(s, p, index) {
+  if (index <= p.position) collectGo(s, p);
+  p.position = index;
+}
+
 /* ------------------------------------------------------------------ */
-/* Resolución de la casilla de llegada                                 */
+/* Resolución de casillas                                              */
 /* ------------------------------------------------------------------ */
 
 function resolveLanding(s, p, rng, ctx = {}) {
@@ -178,7 +178,7 @@ function resolveLanding(s, p, rng, ctx = {}) {
       sendToJail(s, p);
       return;
     case SQUARE_TYPES.TAX:
-      pay(s, p, null, square.amount, square.name);
+      charge(s, p, null, square.amount, square.name);
       return;
     case SQUARE_TYPES.CHANCE:
       drawCard(s, p, 'chance', rng);
@@ -189,8 +189,8 @@ function resolveLanding(s, p, rng, ctx = {}) {
     default:
       break;
   }
-
   if (!isOwnable(square)) return;
+
   const own = s.ownership[square.index];
   if (!own) {
     s.pendingPurchase = square.index;
@@ -199,17 +199,19 @@ function resolveLanding(s, p, rng, ctx = {}) {
   }
   if (own.ownerId === p.id) return;
   if (own.mortgaged) {
-    log(s, `${square.name} está hipotecada: no se paga alquiler.`);
+    log(s, `${square.name} está hipotecada: no se cobra alquiler.`);
     return;
   }
-  let diceTotal = s.lastRollTotal;
-  if (ctx.cardRent === 'utility-10x') {
+  let diceTotal = 0;
+  if (square.type === SQUARE_TYPES.UTILITY) {
+    // G0009: "tira los dados para determinar el alquiler" (decisión C4: tirada nueva).
     const d = [rollDie(rng), rollDie(rng)];
     diceTotal = d[0] + d[1];
-    log(s, `${p.name} tira ${d[0]} + ${d[1]} para calcular el alquiler.`);
+    s.utilityRoll = d;
+    log(s, `${p.name} tira ${d[0]} + ${d[1]} para calcular el alquiler del servicio.`);
   }
   const rent = computeRent(s, square.index, { diceTotal, cardRent: ctx.cardRent });
-  pay(s, p, own.ownerId, rent, `alquiler de ${square.name}`);
+  charge(s, p, own.ownerId, rent, `alquiler de ${square.name}`);
 }
 
 function drawCard(s, p, deck, rng) {
@@ -221,9 +223,9 @@ function drawCard(s, p, deck, rng) {
 
   if (e.kind === 'jail-free') {
     p.jailFreeCards.push({ deck, cardId });
-    return; // no vuelve al mazo hasta que se use
+    return; // se conserva hasta usarla o negociarla
   }
-  s.decks[deck].push(cardId);
+  s.decks[deck].push(cardId); // vuelve al fondo del mazo
 
   switch (e.kind) {
     case 'move-to':
@@ -245,13 +247,13 @@ function drawCard(s, p, deck, rng) {
       p.money += e.amount;
       break;
     case 'pay':
-      pay(s, p, null, e.amount, `carta de ${DECK_NAMES[deck]}`);
+      charge(s, p, null, e.amount, `carta de ${DECK_NAMES[deck]}`);
       break;
     case 'collect-each':
-      for (const other of activePlayers(s)) if (other.id !== p.id) pay(s, other, p.id, e.amount, `carta de ${DECK_NAMES[deck]}`);
+      for (const other of activePlayers(s)) if (other.id !== p.id) charge(s, other, p.id, e.amount, `carta de ${DECK_NAMES[deck]}`);
       break;
     case 'pay-each':
-      for (const other of activePlayers(s)) if (other.id !== p.id) pay(s, p, other.id, e.amount, `carta de ${DECK_NAMES[deck]}`);
+      for (const other of activePlayers(s)) if (other.id !== p.id) charge(s, p, other.id, e.amount, `carta de ${DECK_NAMES[deck]}`);
       break;
     case 'repairs': {
       let total = 0;
@@ -259,7 +261,7 @@ function drawCard(s, p, deck, rng) {
         if (own.ownerId !== p.id || !own.houses) continue;
         total += own.houses === HOTEL ? e.hotel : own.houses * e.house;
       }
-      if (total) pay(s, p, null, total, 'reparaciones');
+      if (total) charge(s, p, null, total, 'reparaciones');
       else log(s, `${p.name} no tiene edificios: no paga nada.`);
       break;
     }
@@ -279,20 +281,25 @@ const stepAfterResolution = (s) => (s.turn.extraRoll ? TURN_STEPS.ROLL : TURN_ST
 
 function advanceTurn(s) {
   const order = s.players;
-  let i = order.findIndex((p) => p.id === s.turn.playerId);
-  for (let n = 0; n < order.length; n++) {
-    i = (i + 1) % order.length;
-    if (i === 0) s.turn.round += 1;
+  const n = order.length;
+  const from = order.findIndex((p) => p.id === s.turn.playerId);
+  let i = from;
+  for (let k = 0; k < n; k++) {
+    i = (i + 1) % n;
     if (order[i].status !== PLAYER_STATUS.BANKRUPT) break;
   }
-  for (const own of Object.values(s.ownership)) delete own.feePaid;
+  // Nueva ronda al volver a pasar por la posición del jugador que empezó.
+  const first = order.findIndex((p) => p.id === s.turn.firstPlayerId);
+  const rel = (x) => (x - first + n) % n;
+  if (rel(i) <= rel(from)) s.turn.round += 1;
   s.turn = { ...s.turn, playerId: order[i].id, step: TURN_STEPS.ROLL, doublesInRow: 0, extraRoll: false };
   s.pendingPurchase = null;
   s.dice = null;
+  s.utilityRoll = null;
   log(s, `Turno de ${order[i].name}.`);
 }
 
-/** Tras cada acción: abre subastas en cola, pasa turno si el actual quebró, detecta ganador. */
+/** Tras cada acción: subastas en cola, turno de un jugador eliminado y ganador. */
 function settle(s) {
   const alive = activePlayers(s);
   if (alive.length === 1) {
@@ -300,56 +307,151 @@ function settle(s) {
     s.winnerId = alive[0].id;
     s.debts = [];
     s.auction = null;
-    s.trade = null;
+    s.auctionQueue = [];
+    s.buildingClaim = null;
+    s.placement = null;
+    s.trades = [];
     log(s, `🏆 ${alive[0].name} gana la partida.`);
     return;
   }
-  if (s.debts.length) return;
-  if (!s.auction && s.auctionQueue.length) startAuction(s, s.auctionQueue.shift());
-  if (s.auction) return;
+  if (s.debts.length || s.placement || s.buildingClaim || s.auction) return;
+  if (s.auctionQueue.length) {
+    startPropertyAuction(s, s.auctionQueue.shift());
+    return;
+  }
   if (player(s, s.turn.playerId).status === PLAYER_STATUS.BANKRUPT) advanceTurn(s);
 }
 
 /* ------------------------------------------------------------------ */
-/* Subastas                                                            */
+/* Subastas (abiertas, sin orden de turno, desde $10)                  */
 /* ------------------------------------------------------------------ */
 
-function startAuction(s, index) {
-  const alive = activePlayers(s);
-  const start = Math.max(0, alive.findIndex((p) => p.id === s.turn.playerId));
-  const bidders = [...alive.slice(start), ...alive.slice(0, start)].map((p) => p.id);
-  s.auction = { index, highBid: 0, highBidderId: null, bidders, currentBidderId: bidders[0] };
-  log(s, `Se subasta ${BOARD[index].name}.`);
+function startPropertyAuction(s, index) {
+  s.auction = {
+    kind: 'property',
+    index,
+    highBid: 0,
+    highBidderId: null,
+    participants: activePlayers(s).map((p) => p.id),
+    passed: [],
+  };
+  log(s, `Se subasta ${BOARD[index].name}. La puja empieza en ${money(AUCTION_MIN_BID)}.`);
 }
 
-function nextBidder(a, fromId) {
-  const i = a.bidders.indexOf(fromId);
-  return a.bidders[(i + 1) % a.bidders.length];
+function startBuildingAuction(s, buildingType, participants) {
+  s.auction = { kind: 'building', buildingType, highBid: 0, highBidderId: null, participants, passed: [] };
+  log(s, `Escasez: se subasta ${buildingType === 'hotel' ? 'un hotel' : 'una casa'} entre ${participants.map((id) => player(s, id).name).join(', ')}.`);
+}
+
+function auctionDone(a) {
+  const others = a.participants.filter((id) => id !== a.highBidderId);
+  return others.every((id) => a.passed.includes(id));
 }
 
 function finishAuctionIfDone(s) {
   const a = s.auction;
-  const done = a.bidders.length === 0 || (a.bidders.length === 1 && a.bidders[0] === a.highBidderId);
-  if (!done) return;
-  const sq = BOARD[a.index];
-  if (a.highBidderId) {
-    const winner = player(s, a.highBidderId);
-    winner.money -= a.highBid;
-    s.ownership[a.index] = { ownerId: winner.id, houses: 0, mortgaged: false };
-    log(s, `${winner.name} gana la subasta de ${sq.name} por ${money(a.highBid)}.`);
-  } else {
-    log(s, `Nadie pujó por ${sq.name}: sigue siendo de la banca.`);
-  }
+  if (!auctionDone(a)) return;
   s.auction = null;
+
+  if (a.kind === 'property') {
+    const sq = BOARD[a.index];
+    if (a.highBidderId) {
+      const w = player(s, a.highBidderId);
+      w.money -= a.highBid;
+      s.ownership[a.index] = { ownerId: w.id, houses: 0, mortgaged: false };
+      log(s, `${w.name} gana la subasta de ${sq.name} por ${money(a.highBid)}.`);
+    } else {
+      log(s, `Nadie pujó por ${sq.name}: sigue siendo de la banca.`);
+    }
+    return;
+  }
+
+  // Edificio en escasez
+  if (!a.highBidderId) {
+    log(s, 'Nadie pujó por el edificio: queda en la banca.');
+    return;
+  }
+  const w = player(s, a.highBidderId);
+  w.money -= a.highBid;
+  if (a.buildingType === 'hotel') s.bank.hotels -= 1;
+  else s.bank.houses -= 1;
+  s.placement = { playerId: w.id, buildingType: a.buildingType };
+  log(s, `${w.name} gana ${a.buildingType === 'hotel' ? 'el hotel' : 'la casa'} por ${money(a.highBid)} y debe colocarlo.`);
+  if (!legalPlacements(s, w.id, a.buildingType).length) cancelPlacement(s, 'no tiene dónde colocarlo');
 }
 
 /* ------------------------------------------------------------------ */
-/* Bancarrota                                                          */
+/* Escasez de edificios (G0009 BUILDINGS: "Not enough buildings?")     */
 /* ------------------------------------------------------------------ */
 
-function bankrupt(s, p, creditorId) {
-  const creditor = creditorId ? player(s, creditorId) : null;
-  // 1) Los edificios vuelven a la banca por la mitad de su coste.
+/** Jugadores que ahora mismo podrían construir un edificio de este tipo. */
+export function eligibleBuilders(s, buildingType) {
+  return activePlayers(s)
+    .filter((p) =>
+      BOARD.some(
+        (sq) =>
+          s.ownership[sq.index]?.ownerId === p.id &&
+          nextBuildingType(s, sq.index) === buildingType &&
+          !buildBlocker(s, p.id, sq.index, { ignoreStock: true }),
+      ),
+    )
+    .map((p) => p.id);
+}
+
+export function legalPlacements(s, playerId, buildingType) {
+  return BOARD.filter(
+    (sq) =>
+      s.ownership[sq.index]?.ownerId === playerId &&
+      nextBuildingType(s, sq.index) === buildingType &&
+      !buildBlocker(s, playerId, sq.index, { ignoreStock: true, ignoreMoney: true }),
+  ).map((sq) => sq.index);
+}
+
+function cancelPlacement(s, why) {
+  const pl = s.placement;
+  if (pl.buildingType === 'hotel') s.bank.hotels += 1;
+  else s.bank.houses += 1;
+  s.placement = null;
+  log(s, `El edificio vuelve a la banca (${why}).`);
+}
+
+function buildNow(s, p, index) {
+  const sq = BOARD[index];
+  const own = s.ownership[index];
+  p.money -= sq.houseCost;
+  if (own.houses === HOUSES_PER_HOTEL) {
+    s.bank.hotels -= 1;
+    s.bank.houses += HOUSES_PER_HOTEL;
+    own.houses = HOTEL;
+    log(s, `${p.name} construye un hotel en ${sq.name}.`);
+  } else {
+    s.bank.houses -= 1;
+    own.houses += 1;
+    log(s, `${p.name} construye una casa en ${sq.name}.`);
+  }
+}
+
+function resolveClaim(s) {
+  const c = s.buildingClaim;
+  if (c.eligible.some((id) => !(id in c.responses))) return;
+  s.buildingClaim = null;
+  const interested = c.eligible.filter((id) => c.responses[id]);
+  const stock = c.buildingType === 'hotel' ? s.bank.hotels : s.bank.houses;
+  const requester = player(s, c.requesterId);
+  if (interested.length > stock && interested.length > 1) {
+    startBuildingAuction(s, c.buildingType, interested);
+    return;
+  }
+  // Alcanza para todos los interesados: se atiende la petición original si sigue siendo legal.
+  if (requester && requester.status !== PLAYER_STATUS.BANKRUPT && !buildBlocker(s, requester.id, c.index)) buildNow(s, requester, c.index);
+}
+
+/* ------------------------------------------------------------------ */
+/* Bancarrota (G0009 HELP! I CAN'T PAY!)                               */
+/* ------------------------------------------------------------------ */
+
+/** Liquidación completa: vende todos los edificios a la banca e hipoteca todo. */
+function liquidateAll(s, p) {
   for (const sq of BOARD) {
     const own = s.ownership[sq.index];
     if (own?.ownerId !== p.id || !own.houses) continue;
@@ -359,22 +461,27 @@ function bankrupt(s, p, creditorId) {
     else s.bank.houses += own.houses;
     own.houses = 0;
   }
-  const owned = BOARD.filter((sq) => s.ownership[sq.index]?.ownerId === p.id);
-
-  if (creditor) {
-    creditor.money += Math.max(0, p.money);
-    for (const sq of owned) {
-      const own = s.ownership[sq.index];
-      own.ownerId = creditor.id;
-      if (own.mortgaged) {
-        own.feePaid = true;
-        charge(s, creditor, null, mortgageFee(sq), `interés de hipoteca de ${sq.name}`);
-      }
+  for (const sq of BOARD) {
+    const own = s.ownership[sq.index];
+    if (own?.ownerId === p.id && !own.mortgaged) {
+      own.mortgaged = true;
+      p.money += sq.mortgage;
     }
+  }
+}
+
+function bankrupt(s, p, creditorId) {
+  liquidateAll(s, p);
+  const owned = BOARD.filter((sq) => s.ownership[sq.index]?.ownerId === p.id);
+  const creditor = creditorId ? player(s, creditorId) : null;
+
+  if (creditor && creditor.status !== PLAYER_STATUS.BANKRUPT) {
+    creditor.money += p.money;
+    for (const sq of owned) s.ownership[sq.index].ownerId = creditor.id; // siguen hipotecadas, sin recargo
     creditor.jailFreeCards.push(...p.jailFreeCards);
-    log(s, `${p.name} quiebra. Todos sus bienes pasan a ${creditor.name}.`);
+    log(s, `${p.name} quiebra. ${creditor.name} recibe ${money(p.money)}, sus propiedades hipotecadas y sus cartas.`);
   } else {
-    for (const sq of owned) delete s.ownership[sq.index];
+    for (const sq of owned) delete s.ownership[sq.index]; // hipotecas canceladas
     s.auctionQueue.push(...owned.map((sq) => sq.index));
     for (const c of p.jailFreeCards) s.decks[c.deck].push(c.cardId);
     log(s, `${p.name} quiebra ante la banca. Sus propiedades salen a subasta.`);
@@ -384,12 +491,33 @@ function bankrupt(s, p, creditorId) {
   p.jailFreeCards = [];
   p.status = PLAYER_STATUS.BANKRUPT;
   s.debts = s.debts.filter((d) => d.debtorId !== p.id && d.creditorId !== p.id);
-  if (s.trade && (s.trade.fromId === p.id || s.trade.toId === p.id)) s.trade = null;
+  s.trades = s.trades.filter((t) => t.fromId !== p.id && t.toId !== p.id);
   if (s.turn.playerId === p.id) s.pendingPurchase = null;
+
+  if (s.auction) {
+    const a = s.auction;
+    a.participants = a.participants.filter((id) => id !== p.id);
+    a.passed = a.passed.filter((id) => id !== p.id);
+    if (a.highBidderId === p.id) {
+      a.highBidderId = null;
+      a.highBid = 0;
+      a.passed = [];
+    }
+    if (!a.participants.length) s.auction = null;
+    else finishAuctionIfDone(s);
+  }
+  if (s.buildingClaim) {
+    const c = s.buildingClaim;
+    c.eligible = c.eligible.filter((id) => id !== p.id);
+    delete c.responses[p.id];
+    if (!c.eligible.length) s.buildingClaim = null;
+    else resolveClaim(s);
+  }
+  if (s.placement?.playerId === p.id) cancelPlacement(s, `${p.name} quebró`);
 }
 
 /* ------------------------------------------------------------------ */
-/* Negociaciones                                                       */
+/* Negociaciones (G0009 DEALS & TRADES: en cualquier momento)          */
 /* ------------------------------------------------------------------ */
 
 function normalizeOffer(o = {}) {
@@ -404,6 +532,7 @@ function validateOffer(s, p, offer) {
   check(p.money >= offer.money, `${p.name} no tiene ${money(offer.money)}.`);
   check(p.jailFreeCards.length >= offer.jailCards, `${p.name} no tiene esas cartas de libertad.`);
   for (const i of offer.squares) {
+    check(BOARD[i] && isOwnable(BOARD[i]), 'Propiedad no válida.');
     const why = tradeBlocker(s, p.id, i);
     if (why) fail(why);
   }
@@ -413,14 +542,8 @@ function transferOffer(s, from, to, offer) {
   from.money -= offer.money;
   to.money += offer.money;
   to.jailFreeCards.push(...from.jailFreeCards.splice(0, offer.jailCards));
-  for (const i of offer.squares) {
-    const own = s.ownership[i];
-    own.ownerId = to.id;
-    if (own.mortgaged) {
-      own.feePaid = true;
-      pay(s, to, null, mortgageFee(BOARD[i]), `interés de hipoteca de ${BOARD[i].name}`);
-    }
-  }
+  // Las hipotecadas pasan tal cual: el nuevo dueño las levanta cuando quiera (sin recargo en G0009).
+  for (const i of offer.squares) s.ownership[i].ownerId = to.id;
 }
 
 /* ------------------------------------------------------------------ */
@@ -428,14 +551,17 @@ function transferOffer(s, from, to, offer) {
 /* ------------------------------------------------------------------ */
 
 const HANDLERS = {
-  [ACTIONS.ROLL_DICE](s, p, _payload, rng) {
-    requireStep(s, TURN_STEPS.ROLL);
+  /* ---------- Turno ---------- */
+
+  [ACTIONS.ROLL_DICE](s, p, _x, rng) {
+    requireTurnAction(s, p, TURN_STEPS.ROLL);
     const d = [rollDie(rng), rollDie(rng)];
     const isDouble = d[0] === d[1];
     s.dice = d;
     s.rollSeq = (s.rollSeq ?? 0) + 1;
     s.lastRollTotal = d[0] + d[1];
     s.lastCard = null;
+    s.utilityRoll = null;
     log(s, `${p.name} saca ${d[0]} + ${d[1]}${isDouble ? ' (dobles)' : ''}.`);
 
     if (p.status === PLAYER_STATUS.IN_JAIL) {
@@ -451,7 +577,7 @@ const HANDLERS = {
           return;
         }
         releaseFromJail(p);
-        pay(s, p, null, JAIL_FINE, 'multa de la cárcel');
+        charge(s, p, null, JAIL_FINE, 'multa de la cárcel');
       }
       s.turn.step = TURN_STEPS.END;
       moveBy(s, p, s.lastRollTotal);
@@ -474,7 +600,7 @@ const HANDLERS = {
   },
 
   [ACTIONS.PAY_JAIL_FINE](s, p) {
-    requireStep(s, TURN_STEPS.ROLL);
+    requireTurnAction(s, p, TURN_STEPS.ROLL);
     check(p.status === PLAYER_STATUS.IN_JAIL, 'No estás en la cárcel.');
     check(p.money >= JAIL_FINE, `Necesitas ${money(JAIL_FINE)}.`);
     p.money -= JAIL_FINE;
@@ -483,7 +609,7 @@ const HANDLERS = {
   },
 
   [ACTIONS.USE_JAIL_CARD](s, p) {
-    requireStep(s, TURN_STEPS.ROLL);
+    requireTurnAction(s, p, TURN_STEPS.ROLL);
     check(p.status === PLAYER_STATUS.IN_JAIL, 'No estás en la cárcel.');
     check(p.jailFreeCards.length > 0, 'No tienes cartas de libertad.');
     const c = p.jailFreeCards.shift();
@@ -493,9 +619,9 @@ const HANDLERS = {
   },
 
   [ACTIONS.BUY_PROPERTY](s, p) {
-    requireStep(s, TURN_STEPS.BUY);
+    requireTurnAction(s, p, TURN_STEPS.BUY);
     const sq = BOARD[s.pendingPurchase];
-    check(p.money >= sq.price, 'No tienes dinero suficiente. Puedes subastarla.');
+    check(p.money >= sq.price, 'No tienes dinero suficiente: hay que subastarla.');
     p.money -= sq.price;
     s.ownership[sq.index] = { ownerId: p.id, houses: 0, mortgaged: false };
     s.pendingPurchase = null;
@@ -503,99 +629,123 @@ const HANDLERS = {
     log(s, `${p.name} compra ${sq.name} por ${money(sq.price)}.`);
   },
 
-  [ACTIONS.DECLINE_PROPERTY](s) {
-    requireStep(s, TURN_STEPS.BUY);
+  [ACTIONS.DECLINE_PROPERTY](s, p) {
+    requireTurnAction(s, p, TURN_STEPS.BUY);
     const index = s.pendingPurchase;
     s.pendingPurchase = null;
     s.turn.step = stepAfterResolution(s);
-    startAuction(s, index);
+    startPropertyAuction(s, index);
   },
+
+  [ACTIONS.END_TURN](s, p) {
+    requireTurnAction(s, p, TURN_STEPS.END);
+    advanceTurn(s);
+  },
+
+  /* ---------- Subastas ---------- */
 
   [ACTIONS.PLACE_BID](s, p, { amount }) {
     const a = s.auction;
-    check(a.currentBidderId === p.id, 'No es tu turno de pujar.');
+    check(a, 'No hay ninguna subasta en curso.');
+    check(a.participants.includes(p.id), 'No participas en esta subasta.');
+    check(a.highBidderId !== p.id, 'Ya tienes la mejor oferta.');
     const bid = Math.floor(Number(amount));
-    check(bid > a.highBid, `La puja debe superar ${money(a.highBid)}.`);
-    check(bid <= p.money, 'No tienes ese dinero.');
+    const min = Math.max(AUCTION_MIN_BID, a.highBid + 1);
+    check(Number.isFinite(bid) && bid >= min, `La puja mínima es ${money(min)}.`);
+    check(bid <= p.money, 'No tienes ese dinero en efectivo.');
     a.highBid = bid;
     a.highBidderId = p.id;
-    a.currentBidderId = nextBidder(a, p.id);
+    a.passed = []; // una nueva puja reabre la subasta para todos
     log(s, `${p.name} puja ${money(bid)}.`);
     finishAuctionIfDone(s);
   },
 
   [ACTIONS.PASS_BID](s, p) {
     const a = s.auction;
-    check(a.currentBidderId === p.id, 'No es tu turno de pujar.');
-    const next = a.bidders.length > 1 ? nextBidder(a, p.id) : null;
-    a.bidders = a.bidders.filter((id) => id !== p.id);
-    a.currentBidderId = next;
-    log(s, `${p.name} se retira de la subasta.`);
+    check(a, 'No hay ninguna subasta en curso.');
+    check(a.participants.includes(p.id), 'No participas en esta subasta.');
+    check(a.highBidderId !== p.id, 'Tienes la mejor oferta.');
+    check(!a.passed.includes(p.id), 'Ya dijiste que no subes.');
+    a.passed.push(p.id);
+    log(s, `${p.name} no sube.`);
     finishAuctionIfDone(s);
   },
 
+  /* ---------- Construcción, venta e hipotecas (en cualquier momento) ---------- */
+
   [ACTIONS.BUILD](s, p, { index }) {
+    requireFree(s, p);
+    check(!s.buildingClaim && !(s.auction?.kind === 'building') && !s.placement, 'Hay una operación de edificios en escasez en curso.');
     const why = buildBlocker(s, p.id, index);
     if (why) fail(why);
-    const sq = BOARD[index];
-    const own = s.ownership[index];
-    p.money -= sq.houseCost;
-    if (own.houses === 4) {
-      s.bank.hotels -= 1;
-      s.bank.houses += 4;
-      own.houses = HOTEL;
-      log(s, `${p.name} construye un hotel en ${sq.name}.`);
-    } else {
-      s.bank.houses -= 1;
-      own.houses += 1;
-      log(s, `${p.name} construye una casa en ${sq.name}.`);
+    const type = nextBuildingType(s, index);
+    const stock = type === 'hotel' ? s.bank.hotels : s.bank.houses;
+    const eligible = eligibleBuilders(s, type);
+    if (eligible.length > 1 && stock < eligible.length) {
+      s.buildingClaim = { buildingType: type, requesterId: p.id, index, eligible, responses: { [p.id]: true } };
+      log(s, `${p.name} quiere ${type === 'hotel' ? 'un hotel' : 'una casa'} y quedan ${stock} en la banca: ¿alguien más lo quiere?`);
+      resolveClaim(s);
+      return;
     }
+    buildNow(s, p, index);
+  },
+
+  [ACTIONS.CLAIM_BUILDING](s, p, { want }) {
+    const c = s.buildingClaim;
+    check(c, 'No hay ninguna solicitud de edificios.');
+    check(c.eligible.includes(p.id) && !(p.id in c.responses), 'No te corresponde responder.');
+    c.responses[p.id] = Boolean(want);
+    log(s, `${p.name} ${want ? 'también lo quiere' : 'no lo quiere'}.`);
+    resolveClaim(s);
+  },
+
+  [ACTIONS.PLACE_BUILDING](s, p, { index }) {
+    const pl = s.placement;
+    check(pl && pl.playerId === p.id, 'No tienes ningún edificio para colocar.');
+    check(legalPlacements(s, p.id, pl.buildingType).includes(Number(index)), 'No se puede colocar ahí.');
+    const own = s.ownership[index];
+    if (pl.buildingType === 'hotel') {
+      own.houses = HOTEL;
+      s.bank.houses += HOUSES_PER_HOTEL;
+    } else {
+      own.houses += 1;
+    }
+    s.placement = null;
+    log(s, `${p.name} coloca ${pl.buildingType === 'hotel' ? 'el hotel' : 'la casa'} en ${BOARD[index].name}.`);
   },
 
   [ACTIONS.SELL_BUILDING](s, p, { index }) {
+    requireFree(s, p);
     const why = sellBlocker(s, p.id, index);
     if (why) fail(why);
-    const sq = BOARD[index];
-    const own = s.ownership[index];
-    if (own.houses === HOTEL) {
-      // El hotel se cambia por 4 casas; si la banca no las tiene, se vende lo que falte.
-      const back = Math.min(4, s.bank.houses);
-      s.bank.hotels += 1;
-      s.bank.houses -= back;
-      own.houses = back;
-      p.money += ((5 - back) * sq.houseCost) / 2;
-      log(s, `${p.name} vende el hotel de ${sq.name}.`);
-    } else {
-      own.houses -= 1;
-      s.bank.houses += 1;
-      p.money += sq.houseCost / 2;
-      log(s, `${p.name} vende una casa de ${sq.name} por ${money(sq.houseCost / 2)}.`);
-    }
+    const wasHotel = s.ownership[index].houses === HOTEL;
+    sellOneBuilding(s, p, index);
+    log(s, `${p.name} vende ${wasHotel ? 'el hotel (lo cambia por 4 casas)' : 'una casa'} de ${BOARD[index].name} por ${money(BOARD[index].houseCost / 2)}.`);
   },
 
   [ACTIONS.MORTGAGE](s, p, { index }) {
+    requireFree(s, p);
     const why = mortgageBlocker(s, p.id, index);
     if (why) fail(why);
-    const sq = BOARD[index];
     s.ownership[index].mortgaged = true;
-    p.money += sq.mortgage;
-    log(s, `${p.name} hipoteca ${sq.name} y recibe ${money(sq.mortgage)}.`);
+    p.money += BOARD[index].mortgage;
+    log(s, `${p.name} hipoteca ${BOARD[index].name} y recibe ${money(BOARD[index].mortgage)}.`);
   },
 
   [ACTIONS.UNMORTGAGE](s, p, { index }) {
+    requireFree(s, p);
     const why = unmortgageBlocker(s, p.id, index);
     if (why) fail(why);
     const sq = BOARD[index];
-    const own = s.ownership[index];
-    const cost = own.feePaid ? sq.mortgage : unmortgageCost(sq);
-    p.money -= cost;
-    own.mortgaged = false;
-    delete own.feePaid;
-    log(s, `${p.name} levanta la hipoteca de ${sq.name} por ${money(cost)}.`);
+    p.money -= sq.unmortgage;
+    s.ownership[index].mortgaged = false;
+    log(s, `${p.name} levanta la hipoteca de ${sq.name} por ${money(sq.unmortgage)}.`);
   },
 
+  /* ---------- Negociaciones (en cualquier momento) ---------- */
+
   [ACTIONS.PROPOSE_TRADE](s, p, { toId, give, get }) {
-    check(s.turn.step !== TURN_STEPS.BUY, 'Decide primero si compras la propiedad.');
+    requireFree(s, p);
     const other = player(s, toId);
     check(other && other.id !== p.id && other.status !== PLAYER_STATUS.BANKRUPT, 'Jugador no válido.');
     const g = normalizeOffer(give);
@@ -603,64 +753,91 @@ const HANDLERS = {
     check(g.money + g.squares.length + g.jailCards + r.money + r.squares.length + r.jailCards > 0, 'La oferta está vacía.');
     validateOffer(s, p, g);
     validateOffer(s, other, r);
-    s.trade = { fromId: p.id, toId: other.id, give: g, get: r };
+    s.trades.push({ id: `t${s.seq++}`, fromId: p.id, toId: other.id, give: g, get: r });
     log(s, `${p.name} propone un trato a ${other.name}.`);
   },
 
-  [ACTIONS.RESPOND_TRADE](s, p, { accept }) {
-    const t = s.trade;
+  [ACTIONS.RESPOND_TRADE](s, p, { tradeId, accept }) {
+    requireFree(s, p);
+    const i = s.trades.findIndex((t) => t.id === tradeId);
+    check(i >= 0, 'Esa oferta ya no existe.');
+    const t = s.trades[i];
     check(p.id === t.toId, 'Sólo el destinatario puede responder.');
     const from = player(s, t.fromId);
-    s.trade = null;
     if (!accept) {
+      s.trades.splice(i, 1);
       log(s, `${p.name} rechaza el trato de ${from.name}.`);
       return;
     }
+    // Se vuelve a validar al aceptar: el estado puede haber cambiado desde la propuesta.
     validateOffer(s, from, t.give);
     validateOffer(s, p, t.get);
+    s.trades.splice(i, 1);
     transferOffer(s, from, p, t.give);
     transferOffer(s, p, from, t.get);
+    // Otras ofertas que incluían esas propiedades quedan inválidas: se retiran.
+    const moved = new Set([...t.give.squares, ...t.get.squares]);
+    s.trades = s.trades.filter((o) => ![...o.give.squares, ...o.get.squares].some((x) => moved.has(x)));
     log(s, `${p.name} acepta el trato de ${from.name}.`);
   },
 
-  [ACTIONS.CANCEL_TRADE](s, p) {
-    check(p.id === s.trade.fromId, 'Sólo quien propuso el trato puede retirarlo.');
-    s.trade = null;
+  [ACTIONS.CANCEL_TRADE](s, p, { tradeId }) {
+    const i = s.trades.findIndex((t) => t.id === tradeId);
+    check(i >= 0, 'Esa oferta ya no existe.');
+    check(s.trades[i].fromId === p.id, 'Sólo quien propuso el trato puede retirarlo.');
+    s.trades.splice(i, 1);
     log(s, `${p.name} retira su propuesta.`);
   },
 
+  /* ---------- Deudas y bancarrota ---------- */
+
   [ACTIONS.PAY_DEBT](s, p) {
-    const d = s.debts[0];
-    check(p.money >= d.amount, `Aún te faltan ${money(d.amount - p.money)}. Vende edificios o hipoteca.`);
+    const d = s.debts.find((x) => x.debtorId === p.id);
+    check(d, 'No tienes deudas pendientes.');
+    check(p.money >= d.amount, `Te faltan ${money(d.amount - p.money)}: vende edificios, hipoteca o negocia.`);
     p.money -= d.amount;
     if (d.creditorId) player(s, d.creditorId).money += d.amount;
-    s.debts.shift();
+    s.debts = s.debts.filter((x) => x !== d);
     log(s, `${p.name} paga ${money(d.amount)} (${d.reason}).`);
   },
 
   [ACTIONS.DECLARE_BANKRUPTCY](s, p) {
-    const d = s.debts[0];
+    const d = s.debts.find((x) => x.debtorId === p.id);
+    check(d, 'Sólo puede quebrar quien tiene una deuda.');
+    const owed = totalDebt(s, p.id);
+    check(
+      maxRaisable(s, p.id) < owed,
+      `Todavía puedes reunir el dinero vendiendo edificios o hipotecando (debes ${money(owed)}).`,
+    );
     bankrupt(s, p, d.creditorId);
   },
 
+  /** Política de plataforma (no es una regla del juego): abandonar = bancarrota ante la banca. */
   [ACTIONS.RESIGN](s, p) {
-    check(!s.debts.length, 'Resuelve antes la deuda pendiente.');
     log(s, `${p.name} abandona la partida.`);
+    s.debts = s.debts.filter((d) => d.debtorId !== p.id);
     bankrupt(s, p, null);
-  },
-
-  [ACTIONS.END_TURN](s) {
-    requireStep(s, TURN_STEPS.END);
-    advanceTurn(s);
   },
 };
 
-/** Ayuda para la interfaz: ¿quién debe decidir ahora? */
-export function getActingPlayerId(state) {
-  if (state.phase !== 'playing') return null;
-  if (state.debts.length) return state.debts[0].debtorId;
-  if (state.auction) return state.auction.currentBidderId;
-  if (state.trade) return state.trade.toId;
-  return state.turn.playerId;
+/* ------------------------------------------------------------------ */
+/* Consultas para la interfaz y el servidor                            */
+/* ------------------------------------------------------------------ */
+
+/** Jugadores de los que se espera una decisión ahora mismo. */
+export function getPendingDeciders(state) {
+  if (state.phase !== 'playing') return [];
+  if (state.debts.length) return [...new Set(state.debts.map((d) => d.debtorId))];
+  if (state.placement) return [state.placement.playerId];
+  if (state.buildingClaim) return state.buildingClaim.eligible.filter((id) => !(id in state.buildingClaim.responses));
+  if (state.auction) {
+    const a = state.auction;
+    return a.participants.filter((id) => id !== a.highBidderId && !a.passed.includes(id));
+  }
+  return [state.turn.playerId];
 }
 
+/** Primer jugador que debe decidir (útil para el modo "misma PC"). */
+export function getActingPlayerId(state) {
+  return getPendingDeciders(state)[0] ?? null;
+}

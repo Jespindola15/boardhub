@@ -5,7 +5,7 @@ import Token from './Token.jsx';
 import SquareIcon from '../icons/SquareIcon.jsx';
 import AuctionPanel from '../controls/AuctionPanel.jsx';
 import DebtPanel from '../controls/DebtPanel.jsx';
-import TradeReview from '../controls/TradeReview.jsx';
+import { ClaimPanel, PlacementPanel } from '../controls/ShortagePanels.jsx';
 import CardReveal from '../controls/CardReveal.jsx';
 import { getCurrentPlayer, getPlayer } from '../../state/selectors.js';
 import { ACTIONS, getActingPlayerId, JAIL_FINE } from '../../engine/index.js';
@@ -54,10 +54,12 @@ export default function BoardCenter({ state, send, onOpenTrade, onNewGame }) {
           <Winner state={state} onNewGame={onNewGame} />
         ) : state.debts.length ? (
           <DebtPanel state={state} send={send} />
+        ) : state.placement ? (
+          <PlacementPanel state={state} send={send} />
+        ) : state.buildingClaim ? (
+          <ClaimPanel state={state} send={send} />
         ) : state.auction ? (
           <AuctionPanel state={state} send={send} />
-        ) : state.trade ? (
-          <TradeReview state={state} send={send} />
         ) : (
           <>
             {state.lastCard && <CardReveal card={state.lastCard} />}
@@ -104,12 +106,12 @@ function TurnActions({ state, send, player, onOpenTrade }) {
       </div>
 
       <div className="center__secondary">
-        <Button size="sm" variant="ghost" onClick={onOpenTrade} disabled={step === 'buy'}>
+        <Button size="sm" variant="ghost" onClick={onOpenTrade}>
           Negociar
         </Button>
         {confirmResign ? (
           <>
-            <Button size="sm" variant="danger" onClick={() => send(ACTIONS.RESIGN)}>
+            <Button size="sm" variant="danger" onClick={() => send(ACTIONS.RESIGN, {}, player.id)}>
               Confirmar abandono
             </Button>
             <Button size="sm" variant="ghost" onClick={() => setConfirmResign(false)}>
@@ -122,7 +124,9 @@ function TurnActions({ state, send, player, onOpenTrade }) {
           </Button>
         )}
       </div>
-      <p className="center__hint">Construye, vende e hipoteca desde la ficha de cada propiedad (clic en la casilla).</p>
+      <p className="center__hint">
+        Cualquier jugador puede construir, vender, hipotecar y negociar en cualquier momento: clic en una casilla para ver su ficha.
+      </p>
     </div>
   );
 }

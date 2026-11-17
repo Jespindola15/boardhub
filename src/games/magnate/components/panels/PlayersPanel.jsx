@@ -13,7 +13,7 @@ const STATUS_TONE = {
   [PLAYER_STATUS.DISCONNECTED]: 'pending',
 };
 
-export default function PlayersPanel({ state, highlightPlayerId, onHighlight, onSelectSquare, actingId }) {
+export default function PlayersPanel({ state, highlightPlayerId, onHighlight, onSelectSquare, deciders = [] }) {
   return (
     <Panel
       title="Jugadores"
@@ -29,7 +29,7 @@ export default function PlayersPanel({ state, highlightPlayerId, onHighlight, on
           state={state}
           isTurn={state.turn.playerId === p.id}
           isHighlighted={highlightPlayerId === p.id}
-          isActing={actingId === p.id && state.turn.playerId !== p.id}
+          isActing={deciders.includes(p.id) && !(state.turn.playerId === p.id && deciders.length === 1)}
           onHighlight={onHighlight}
           onSelectSquare={onSelectSquare}
         />
@@ -62,10 +62,10 @@ function PlayerCard({ player, order, state, isTurn, isActing, isHighlighted, onH
           <span className={`pcard__money ${player.money < 200 ? 'is-low' : ''}`}>{formatMoney(player.money)}</span>
         </div>
         <div className="pcard__row pcard__row--meta">
-          {isTurn ? (
-            <Badge tone="brand">▶ Su turno</Badge>
-          ) : isActing ? (
+          {isActing ? (
             <Badge tone="warn">Debe decidir</Badge>
+          ) : isTurn ? (
+            <Badge tone="brand">▶ Su turno</Badge>
           ) : (
             <Badge tone={STATUS_TONE[player.status]}>{PLAYER_STATUS_LABEL[player.status]}</Badge>
           )}

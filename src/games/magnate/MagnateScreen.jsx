@@ -6,10 +6,11 @@ import PlayersPanel from './components/panels/PlayersPanel.jsx';
 import SquareDetail from './components/panels/SquareDetail.jsx';
 import GameLog from './components/panels/GameLog.jsx';
 import BankPanel from './components/panels/BankPanel.jsx';
+import OffersPanel from './components/panels/OffersPanel.jsx';
 import TradeComposer from './components/controls/TradeComposer.jsx';
 import SetupScreen from './components/setup/SetupScreen.jsx';
 import useLocalMagnate from './useLocalMagnate.js';
-import { getActingPlayerId } from './engine/index.js';
+import { getPendingDeciders } from './engine/index.js';
 import './magnate.css';
 import './components/controls/controls.css';
 
@@ -34,7 +35,7 @@ export default function MagnateScreen({ manifest }) {
   // Al caer en una propiedad en venta, mostrar su ficha automáticamente.
   useEffect(() => {
     if (state?.pendingPurchase != null) setSelectedIndex(state.pendingPurchase);
-    else if (state?.auction) setSelectedIndex(state.auction.index);
+    else if (state?.auction?.kind === 'property') setSelectedIndex(state.auction.index);
   }, [state?.pendingPurchase, state?.auction?.index]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const selectSquare = useCallback((i) => setSelectedIndex((cur) => (cur === i ? null : i)), []);
@@ -54,6 +55,7 @@ export default function MagnateScreen({ manifest }) {
       <div className="magnate__layout">
         <aside className="magnate__left">
           <SquareDetail state={state} index={selectedIndex} send={send} />
+          <OffersPanel state={state} send={send} />
           <BankPanel state={state} />
         </aside>
 
@@ -66,7 +68,7 @@ export default function MagnateScreen({ manifest }) {
         <aside className="magnate__right">
           <PlayersPanel
             state={state}
-            actingId={getActingPlayerId(state)}
+            deciders={getPendingDeciders(state)}
             highlightPlayerId={highlightPlayerId}
             onHighlight={setHighlightPlayerId}
             onSelectSquare={setSelectedIndex}

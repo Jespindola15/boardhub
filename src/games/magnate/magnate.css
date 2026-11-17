@@ -175,7 +175,7 @@
 .deed__table td { padding: 3px 0; border-bottom: 1px dashed rgba(28, 31, 51, 0.15); }
 .deed__table td:last-child { text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
 .deed__table tr.is-base td { font-weight: 800; }
-.deed__facts { display: grid; grid-template-columns: repeat(3, 1fr); margin: 6px 12px 0; gap: 6px; }
+.deed__facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(62px, 1fr)); margin: 6px 12px 0; gap: 6px; }
 .deed__facts div { background: rgba(28, 31, 51, 0.06); border-radius: 6px; padding: 5px 6px; text-align: center; }
 .deed__facts dt { font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.06em; color: #5d6077; }
 .deed__facts dd { margin: 0; font-weight: 800; font-size: 13px; }
@@ -261,3 +261,16 @@
 .deed__manage-note { padding: 8px 12px 10px; background: #1c1f33; color: var(--text-3); font-size: 11.5px; margin: 0; }
 .pcard__chip { border: 0; padding: 0; cursor: pointer; }
 .pcard__chip:hover { transform: scale(1.3); }
+
+.deed__manage-who { font-size: 10.5px; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.08em; }
+.deed__manage-why { font-size: 11px; color: var(--text-3); line-height: 1.35; }
+
+/* ---------------- Ofertas abiertas ---------------- */
+.offers-panel { flex: 0 1 auto; max-height: 40%; min-height: 0; }
+.offers__body { overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+.offer { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px; font-size: 12.5px; }
+.offer header { margin-bottom: 6px; }
+.offer__cols { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.offer__cols h5 { margin: 0 0 3px; font-size: 10px; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.06em; }
+.offer .offer-list { font-size: 12px; }
+.offer__actions { display: flex; gap: 4px; margin-top: 8px; flex-wrap: wrap; }
