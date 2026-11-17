@@ -14,7 +14,7 @@ const STEPS = [
 
 export default function HomePage() {
   const featured = GAMES.find((g) => g.status === 'available');
-  const upcoming = GAMES.filter((g) => g !== featured);
+  const upcoming = GAMES.filter((g) => g.status !== 'available');
 
   return (
     <div className="home">
@@ -23,7 +23,7 @@ export default function HomePage() {
       <main className="home__main">
         <section className="hero">
           <div className="hero__copy">
-            <Badge tone="brand">Fase 1 · Vista previa</Badge>
+            <Badge tone="brand">Fase 2 · Juego local</Badge>
             <h1 className="hero__title">
               Juegos de mesa con tus amigos,
               <br />
@@ -31,11 +31,11 @@ export default function HomePage() {
             </h1>
             <p className="hero__lead">
               BoardHub es una plataforma de juegos de mesa multijugador. Sin descargas, sin instalaciones y sin
-              registro obligatorio. Empezamos con <strong>Magnate</strong>.
+              registro obligatorio. Ya puedes jugar <strong>Magnate</strong> y <strong>Comodín</strong> en una misma PC.
             </p>
             <div className="hero__actions">
               <Button variant="primary" size="lg" onClick={() => navigate('/juegos/magnate')}>
-                Ver la mesa de Magnate
+                Jugar Magnate
               </Button>
               <Button size="lg" pending pendingNote="Las salas privadas online llegarán con el servidor">
                 Crear sala privada
@@ -53,7 +53,7 @@ export default function HomePage() {
         <section id="catalogo" className="catalog">
           <div className="section-head">
             <h2>Catálogo de juegos</h2>
-            <p>Un juego disponible y más en camino. Cada juego se añade como un módulo independiente.</p>
+            <p>Cada juego se añade como un módulo independiente con su propio motor de reglas.</p>
           </div>
           <div className="catalog__grid">
             {GAMES.map((g) => (
@@ -66,8 +66,8 @@ export default function HomePage() {
           <div className="section-head">
             <h2>Así funcionará el juego online</h2>
             <p>
-              Hoy puedes ver la mesa con datos simulados. Las salas y la partida en tiempo real llegan en las próximas
-              fases.
+              Hoy se juega en una misma PC pasándose el turno. Las salas online usarán exactamente los mismos motores de
+              reglas, ejecutados en el servidor.
             </p>
           </div>
           <ol className="how__steps">
@@ -84,9 +84,9 @@ export default function HomePage() {
       </main>
 
       <footer className="site-footer">
-        <span>BoardHub Online · Fase 1</span>
+        <span>BoardHub Online · Fase 2</span>
         <span>
-          {upcoming.length} juegos en desarrollo
+          {upcoming.length} juegos más en desarrollo
         </span>
       </footer>
     </div>

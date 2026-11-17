@@ -59,7 +59,7 @@ export function createPlayer({ id, name, colorId, tokenId, isHost = false }) {
     position: 0,
     status: PLAYER_STATUS.ACTIVE,
     jailTurns: 0,
-    jailFreeCards: 0,
+    jailFreeCards: [], // [{ deck, cardId }]
   };
 }
 

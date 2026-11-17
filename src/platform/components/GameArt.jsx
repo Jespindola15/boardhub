@@ -10,8 +10,10 @@ export default function GameArt({ art }) {
       return <ConquistaArt />;
     case 'ludo':
       return <LudoArt />;
-    case 'cartas':
-      return <CartasArt />;
+    case 'comodin':
+      return <ComodinArt />;
+    case 'colonos':
+      return <ColonosArt />;
     default:
       return null;
   }
@@ -98,19 +100,47 @@ function LudoArt() {
   );
 }
 
-function CartasArt() {
+function ComodinArt() {
+  const cards = [
+    ['#ef4444', '7', -22],
+    ['#facc15', '+2', -8],
+    ['#22c55e', '3', 6],
+    ['#3b82f6', '9', 20],
+  ];
   return (
     <svg viewBox="0 0 320 180" className="game-art" aria-hidden="true">
-      <rect width="320" height="180" fill="#151032" />
-      {[-24, -8, 8, 24].map((r, i) => (
-        <g key={r} transform={`translate(160 150) rotate(${r}) translate(-34 -120)`}>
-          <rect width="68" height="98" rx="8" fill="#f7f4ec" stroke="#d8d2c2" />
-          <text x="10" y="22" fontSize="16" fontWeight="800" fill={i % 2 ? '#e8473f' : '#1d2245'}>
-            {['A', 'K', 'Q', 'J'][i]}
-          </text>
-          <circle cx="34" cy="55" r="12" fill={i % 2 ? '#e8473f' : '#1d2245'} opacity="0.85" />
+      <rect width="320" height="180" fill="#12301f" />
+      <circle cx="160" cy="95" r="120" fill="#18402f" />
+      {cards.map(([c, t, r]) => (
+        <g key={c} transform={`translate(160 160) rotate(${r}) translate(-30 -118)`}>
+          <rect width="60" height="88" rx="8" fill={c} stroke="#fff" strokeWidth="4" />
+          <rect x="10" y="16" width="40" height="56" rx="14" fill="#fff" transform="rotate(-12 30 44)" />
+          <text x="30" y="54" textAnchor="middle" fontSize="22" fontWeight="900" fill={c}>{t}</text>
         </g>
       ))}
+    </svg>
+  );
+}
+
+function ColonosArt() {
+  const hex = (cx, cy, fill) => {
+    const pts = Array.from({ length: 6 }, (_, i) => {
+      const a = (Math.PI / 3) * i + Math.PI / 6;
+      return `${cx + 26 * Math.cos(a)},${cy + 26 * Math.sin(a)}`;
+    }).join(' ');
+    return <polygon key={`${cx}-${cy}`} points={pts} fill={fill} stroke="#f3e7c3" strokeWidth="3" />;
+  };
+  const tiles = [
+    [115, 52, '#2f8f4e'], [160, 52, '#d9b44a'], [205, 52, '#8d9aa5'],
+    [92, 92, '#c8693d'], [137, 92, '#7cc36b'], [183, 92, '#2f8f4e'], [228, 92, '#d9b44a'],
+    [115, 132, '#e8d9a0'], [160, 132, '#c8693d'], [205, 132, '#7cc36b'],
+  ];
+  return (
+    <svg viewBox="0 0 320 180" className="game-art" aria-hidden="true">
+      <rect width="320" height="180" fill="#1d4f7a" />
+      {tiles.map(([x, y, f]) => hex(x, y, f))}
+      <circle cx="160" cy="92" r="12" fill="#fff" />
+      <text x="160" y="97" textAnchor="middle" fontSize="13" fontWeight="800" fill="#b91c1c">8</text>
     </svg>
   );
 }

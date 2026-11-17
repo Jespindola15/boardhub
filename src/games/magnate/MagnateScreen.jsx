@@ -4,30 +4,25 @@ import Board from './components/board/Board.jsx';
 import BoardCenter from './components/board/BoardCenter.jsx';
 import PlayersPanel from './components/panels/PlayersPanel.jsx';
 import SquareDetail from './components/panels/SquareDetail.jsx';
-import TestToolsPanel from './components/panels/TestToolsPanel.jsx';
 import GameLog from './components/panels/GameLog.jsx';
-import { createMockGame } from './state/mockScenarios.js';
-import { BOARD_SIZE } from './data/board.js';
-import { PLAYER_STATUS } from './models/player.js';
+import BankPanel from './components/panels/BankPanel.jsx';
+import TradeComposer from './components/controls/TradeComposer.jsx';
+import SetupScreen from './components/setup/SetupScreen.jsx';
+import useLocalMagnate from './useLocalMagnate.js';
+import { getActingPlayerId } from './engine/index.js';
 import './magnate.css';
+import './components/controls/controls.css';
 
 /**
- * Pantalla de partida de Magnate.
- *
- * Fase 1: el estado proviene de datos simulados. En la Fase 2 se sustituirá
- * por el estado oficial recibido del servidor (ver src/net/README.md); los
- * componentes hijos no cambian porque sólo reciben `state` por props.
+ * Pantalla de Magnate. La partida la controla `useLocalMagnate` (misma PC).
+ * Cuando exista el servidor se sustituirá por un controlador online con la
+ * misma interfaz { state, send } y esta pantalla no cambiará.
  */
 export default function MagnateScreen({ manifest }) {
-  const [playerCount, setPlayerCount] = useState(6);
-  const [scenarioId, setScenarioId] = useState('mid-game');
-  const [state, setState] = useState(() => createMockGame(6, 'mid-game'));
+  const { state, send, error, start, quit } = useLocalMagnate();
   const [selectedIndex, setSelectedIndex] = useState(null);
   const [highlightPlayerId, setHighlightPlayerId] = useState(null);
-
-  useEffect(() => {
-    setState(createMockGame(playerCount, scenarioId));
-  }, [playerCount, scenarioId]);
+  const [tradeOpen, setTradeOpen] = useState(false);
 
   useEffect(() => {
     document.title = `${manifest?.name ?? 'Magnate'} · BoardHub`;
@@ -36,50 +31,56 @@ export default function MagnateScreen({ manifest }) {
     return () => window.removeEventListener('keydown', onKey);
   }, [manifest]);
 
+  // Al caer en una propiedad en venta, mostrar su ficha automáticamente.
+  useEffect(() => {
+    if (state?.pendingPurchase != null) setSelectedIndex(state.pendingPurchase);
+    else if (state?.auction) setSelectedIndex(state.auction.index);
+  }, [state?.pendingPurchase, state?.auction?.index]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const selectSquare = useCallback((i) => setSelectedIndex((cur) => (cur === i ? null : i)), []);
 
-  /** Herramienta de prueba: recoloca fichas al azar para comprobar la animación. */
-  const shuffleTokens = () =>
-    setState((s) => ({
-      ...s,
-      players: s.players.map((p) =>
-        p.status === PLAYER_STATUS.IN_JAIL || p.status === PLAYER_STATUS.BANKRUPT
-          ? p
-          : { ...p, position: Math.floor(Math.random() * BOARD_SIZE) },
-      ),
-    }));
+  if (!state) {
+    return (
+      <div className="magnate">
+        <GameTopBar manifest={manifest} inGame={false} />
+        <SetupScreen onStart={start} />
+      </div>
+    );
+  }
 
   return (
     <div className="magnate">
-      <GameTopBar manifest={manifest} />
+      <GameTopBar manifest={manifest} inGame onQuit={quit} />
       <div className="magnate__layout">
         <aside className="magnate__left">
-          <SquareDetail state={state} index={selectedIndex} />
-          <TestToolsPanel
-            playerCount={playerCount}
-            scenarioId={scenarioId}
-            onPlayerCount={setPlayerCount}
-            onScenario={setScenarioId}
-            onShuffle={shuffleTokens}
-          />
+          <SquareDetail state={state} index={selectedIndex} send={send} />
+          <BankPanel state={state} />
         </aside>
 
         <main className="magnate__board">
-          <Board
-            state={state}
-            selectedIndex={selectedIndex}
-            onSelectSquare={selectSquare}
-            highlightPlayerId={highlightPlayerId}
-          >
-            <BoardCenter state={state} />
+          <Board state={state} selectedIndex={selectedIndex} onSelectSquare={selectSquare} highlightPlayerId={highlightPlayerId}>
+            <BoardCenter state={state} send={send} onOpenTrade={() => setTradeOpen(true)} onNewGame={quit} />
           </Board>
         </main>
 
         <aside className="magnate__right">
-          <PlayersPanel state={state} highlightPlayerId={highlightPlayerId} onHighlight={setHighlightPlayerId} />
+          <PlayersPanel
+            state={state}
+            actingId={getActingPlayerId(state)}
+            highlightPlayerId={highlightPlayerId}
+            onHighlight={setHighlightPlayerId}
+            onSelectSquare={setSelectedIndex}
+          />
           <GameLog entries={state.log} />
         </aside>
       </div>
+
+      {tradeOpen && <TradeComposer state={state} send={send} onClose={() => setTradeOpen(false)} />}
+      {error && (
+        <div className="toast" role="alert" key={error}>
+          {error}
+        </div>
+      )}
     </div>
   );
 }

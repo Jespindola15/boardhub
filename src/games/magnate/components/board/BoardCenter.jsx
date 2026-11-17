@@ -1,65 +1,164 @@
+import { useState } from 'react';
 import Button from '../../../../shared/Button.jsx';
 import Dice from './Dice.jsx';
 import Token from './Token.jsx';
 import SquareIcon from '../icons/SquareIcon.jsx';
-import { getCurrentPlayer } from '../../state/selectors.js';
+import AuctionPanel from '../controls/AuctionPanel.jsx';
+import DebtPanel from '../controls/DebtPanel.jsx';
+import TradeReview from '../controls/TradeReview.jsx';
+import CardReveal from '../controls/CardReveal.jsx';
+import { getCurrentPlayer, getPlayer } from '../../state/selectors.js';
+import { ACTIONS, getActingPlayerId, JAIL_FINE } from '../../engine/index.js';
+import { BOARD } from '../../data/board.js';
+import { formatMoney } from '../format.js';
 
 /**
- * Centro del tablero: identidad del juego, mazos, dados y controles de turno.
- * Todos los controles de partida están marcados como pendientes en la Fase 1.
+ * Centro del tablero: estado del turno, dados y controles.
+ * Muestra sólo las acciones válidas para quien debe decidir ahora.
  */
-export default function BoardCenter({ state }) {
+export default function BoardCenter({ state, send, onOpenTrade, onNewGame }) {
   const current = getCurrentPlayer(state);
+  const actingId = getActingPlayerId(state);
+  const acting = getPlayer(state, actingId);
 
   return (
     <div className="center">
-      <Deck kind="chance" label="Fortuna" remaining={state.decks.chance.remaining} />
-      <Deck kind="community" label="Arca Vecinal" remaining={state.decks.community.remaining} />
+      <Deck kind="chance" label="Fortuna" remaining={state.decks.chance.length} />
+      <Deck kind="community" label="Arca Vecinal" remaining={state.decks.community.length} />
 
       <div className="center__brand">
         <span className="center__logo">MAGNATE</span>
-        <span className="center__tag">Compra · Alquila · Negocia</span>
       </div>
 
       <div className="center__turn">
         {current && <Token player={current} isCurrent className="token--inline" />}
         <div>
-          <div className="center__turn-name">Turno de {current?.name ?? '—'}</div>
-          <div className="center__turn-meta">Ronda {state.turn.round}</div>
+          <div className="center__turn-name">Turno de {current?.name}</div>
+          <div className="center__turn-meta">
+            Ronda {state.turn.round}
+            {acting && actingId !== current?.id && (
+              <>
+                {' · '}decide <strong style={{ color: 'var(--text-1)' }}>{acting.name}</strong>
+              </>
+            )}
+          </div>
         </div>
       </div>
 
       <div className="center__dice">
-        <Dice values={state.dice} />
-        <span className="center__dice-note">{state.dice ? 'Última tirada (simulada)' : 'Sin tirada'}</span>
+        <Dice values={state.dice} rollKey={state.rollSeq ?? 0} />
       </div>
 
-      <div className="center__actions">
-        <div className="center__caption">
-          Controles de turno <span className="bh-btn__pending">Pendientes · Fase 2</span>
-        </div>
-        <div className="center__primary">
-          <Button variant="primary" showPendingTag={false} pending pendingNote="Los dados se lanzarán en el servidor (Fase 2)">
-            Lanzar dados
-          </Button>
-          <Button showPendingTag={false} pending pendingNote="Compra de propiedades: Fase 2">Comprar</Button>
-          <Button showPendingTag={false} pending pendingNote="Subastas: Fase 2">Subastar</Button>
-          <Button showPendingTag={false} pending pendingNote="Gestión de turnos: Fase 2">Terminar turno</Button>
-        </div>
-        <div className="center__secondary">
-          <Button size="sm" variant="ghost" showPendingTag={false} pending pendingNote="Construcción de casas y hoteles">Construir</Button>
-          <Button size="sm" variant="ghost" showPendingTag={false} pending pendingNote="Hipotecas">Hipotecar</Button>
-          <Button size="sm" variant="ghost" showPendingTag={false} pending pendingNote="Negociaciones entre jugadores">Negociar</Button>
-          <Button size="sm" variant="ghost" showPendingTag={false} pending pendingNote="Bancarrota y abandono">Rendirse</Button>
-        </div>
+      <div className="center__context">
+        {state.phase === 'finished' ? (
+          <Winner state={state} onNewGame={onNewGame} />
+        ) : state.debts.length ? (
+          <DebtPanel state={state} send={send} />
+        ) : state.auction ? (
+          <AuctionPanel state={state} send={send} />
+        ) : state.trade ? (
+          <TradeReview state={state} send={send} />
+        ) : (
+          <>
+            {state.lastCard && <CardReveal card={state.lastCard} />}
+            <TurnActions state={state} send={send} player={current} onOpenTrade={onOpenTrade} />
+          </>
+        )}
       </div>
+    </div>
+  );
+}
+
+function TurnActions({ state, send, player, onOpenTrade }) {
+  const [confirmResign, setConfirmResign] = useState(false);
+  const step = state.turn.step;
+  const inJail = player.status === 'in-jail';
+
+  return (
+    <div className="center__actions">
+      <div className="center__primary">
+        {step === 'roll' && inJail && (
+          <>
+            <Button onClick={() => send(ACTIONS.PAY_JAIL_FINE)} disabled={player.money < JAIL_FINE}>
+              Pagar {formatMoney(JAIL_FINE)}
+            </Button>
+            <Button onClick={() => send(ACTIONS.USE_JAIL_CARD)} disabled={!player.jailFreeCards.length}>
+              Usar carta ({player.jailFreeCards.length})
+            </Button>
+            <Button variant="primary" className="span-2" onClick={() => send(ACTIONS.ROLL_DICE)}>
+              Tirar dados para sacar dobles ({player.jailTurns + 1}/3)
+            </Button>
+          </>
+        )}
+        {step === 'roll' && !inJail && (
+          <Button variant="primary" size="lg" className="span-2" onClick={() => send(ACTIONS.ROLL_DICE)}>
+            {state.turn.extraRoll ? '¡Dobles! Tirar otra vez' : 'Tirar dados'}
+          </Button>
+        )}
+        {step === 'buy' && <BuyChoice state={state} send={send} player={player} />}
+        {step === 'end' && (
+          <Button variant="primary" size="lg" className="span-2" onClick={() => send(ACTIONS.END_TURN)}>
+            Terminar turno
+          </Button>
+        )}
+      </div>
+
+      <div className="center__secondary">
+        <Button size="sm" variant="ghost" onClick={onOpenTrade} disabled={step === 'buy'}>
+          Negociar
+        </Button>
+        {confirmResign ? (
+          <>
+            <Button size="sm" variant="danger" onClick={() => send(ACTIONS.RESIGN)}>
+              Confirmar abandono
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setConfirmResign(false)}>
+              Cancelar
+            </Button>
+          </>
+        ) : (
+          <Button size="sm" variant="ghost" onClick={() => setConfirmResign(true)}>
+            Abandonar
+          </Button>
+        )}
+      </div>
+      <p className="center__hint">Construye, vende e hipoteca desde la ficha de cada propiedad (clic en la casilla).</p>
+    </div>
+  );
+}
+
+function BuyChoice({ state, send, player }) {
+  const sq = BOARD[state.pendingPurchase];
+  return (
+    <>
+      <div className="center__offer span-2">
+        <strong>{sq.name}</strong> está a la venta por {formatMoney(sq.price)}
+      </div>
+      <Button variant="primary" onClick={() => send(ACTIONS.BUY_PROPERTY)} disabled={player.money < sq.price}>
+        Comprar
+      </Button>
+      <Button onClick={() => send(ACTIONS.DECLINE_PROPERTY)}>Subastar</Button>
+    </>
+  );
+}
+
+function Winner({ state, onNewGame }) {
+  const w = getPlayer(state, state.winnerId);
+  return (
+    <div className="center__winner">
+      <Token player={w} isCurrent className="token--winner" />
+      <h3>¡{w.name} gana la partida!</h3>
+      <p>Es el último jugador que queda en pie, tras {state.turn.round} rondas.</p>
+      <Button variant="primary" size="lg" onClick={onNewGame}>
+        Nueva partida
+      </Button>
     </div>
   );
 }
 
 function Deck({ kind, label, remaining }) {
   return (
-    <div className={`deck deck--${kind}`} title={`${label}: ${remaining} cartas (dato simulado)`}>
+    <div className={`deck deck--${kind}`} title={`${label}: ${remaining} cartas en el mazo`}>
       <span className="deck__card deck__card--3" />
       <span className="deck__card deck__card--2" />
       <span className="deck__card deck__card--1">

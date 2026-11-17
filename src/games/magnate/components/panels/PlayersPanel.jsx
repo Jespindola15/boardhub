@@ -13,7 +13,7 @@ const STATUS_TONE = {
   [PLAYER_STATUS.DISCONNECTED]: 'pending',
 };
 
-export default function PlayersPanel({ state, highlightPlayerId, onHighlight }) {
+export default function PlayersPanel({ state, highlightPlayerId, onHighlight, onSelectSquare, actingId }) {
   return (
     <Panel
       title="Jugadores"
@@ -29,14 +29,16 @@ export default function PlayersPanel({ state, highlightPlayerId, onHighlight }) 
           state={state}
           isTurn={state.turn.playerId === p.id}
           isHighlighted={highlightPlayerId === p.id}
+          isActing={actingId === p.id && state.turn.playerId !== p.id}
           onHighlight={onHighlight}
+          onSelectSquare={onSelectSquare}
         />
       ))}
     </Panel>
   );
 }
 
-function PlayerCard({ player, order, state, isTurn, isHighlighted, onHighlight }) {
+function PlayerCard({ player, order, state, isTurn, isActing, isHighlighted, onHighlight, onSelectSquare }) {
   const color = getPlayerColor(player.colorId).hex;
   const squares = getPlayerSquares(state, player.id);
   const bankrupt = player.status === PLAYER_STATUS.BANKRUPT;
@@ -62,6 +64,8 @@ function PlayerCard({ player, order, state, isTurn, isHighlighted, onHighlight }
         <div className="pcard__row pcard__row--meta">
           {isTurn ? (
             <Badge tone="brand">▶ Su turno</Badge>
+          ) : isActing ? (
+            <Badge tone="warn">Debe decidir</Badge>
           ) : (
             <Badge tone={STATUS_TONE[player.status]}>{PLAYER_STATUS_LABEL[player.status]}</Badge>
           )}
@@ -72,15 +76,17 @@ function PlayerCard({ player, order, state, isTurn, isHighlighted, onHighlight }
         <div className="pcard__props" aria-label={`${squares.length} propiedades`}>
           {squares.length === 0 && <span className="pcard__noprops">Sin propiedades</span>}
           {squares.map((sq) => (
-            <span
+            <button
+              type="button"
               key={sq.id}
+              onClick={() => onSelectSquare(sq.index)}
               className={`pcard__chip ${state.ownership[sq.index].mortgaged ? 'is-mortgaged' : ''}`}
               style={{ background: getGroup(sq.group).color }}
               title={`${sq.name}${state.ownership[sq.index].mortgaged ? ' (hipotecada)' : ''}`}
             />
           ))}
-          {player.jailFreeCards > 0 && (
-            <span className="pcard__card" title="Carta «Sal de la cárcel»">🗝 {player.jailFreeCards}</span>
+          {player.jailFreeCards.length > 0 && (
+            <span className="pcard__card" title="Carta de libertad">🗝 {player.jailFreeCards.length}</span>
           )}
         </div>
       </div>

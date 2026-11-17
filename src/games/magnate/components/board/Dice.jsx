@@ -18,10 +18,10 @@ export function Die({ value }) {
   );
 }
 
-export default function Dice({ values }) {
+export default function Dice({ values, rollKey = 0 }) {
   const [a, b] = values ?? [null, null];
   return (
-    <div className={`dice ${a === b && a ? 'is-double' : ''}`}>
+    <div key={rollKey} className={`dice ${a === b && a ? 'is-double' : ''} ${values ? 'is-rolled' : 'is-idle'}`}>
       <Die value={a} />
       <Die value={b} />
     </div>

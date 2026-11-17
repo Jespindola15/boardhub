@@ -79,6 +79,7 @@
   transition: background 0.2s, border-color 0.2s, transform 0.2s var(--ease);
   animation: fade-up 0.35s var(--ease) both;
   overflow: hidden;
+  flex: none;
 }
 .pcard:hover { background: var(--surface-strong); }
 .pcard.is-highlighted { border-color: color-mix(in srgb, var(--pcolor) 60%, transparent); }
@@ -125,7 +126,7 @@
 }
 
 /* ---------------- Registro ---------------- */
-.log-panel { flex: 0 0 auto; max-height: 30%; }
+.log-panel { flex: 0 1 auto; max-height: 34%; min-height: 120px; }
 .log__body { overflow-y: auto; }
 .log__list { margin: 0; padding: 0 0 0 18px; display: flex; flex-direction: column; gap: 5px; font-size: 12.5px; color: var(--text-2); }
 .log__list li::marker { color: var(--text-3); }
@@ -243,5 +244,20 @@
   .deed__head { padding: 9px 12px; }
   .deed__name { font-size: 15px; }
   .tools-panel .bh-panel__body { gap: 7px; }
-  .log-panel { max-height: 22%; }
+  .log-panel { max-height: 30%; min-height: 100px; }
 }
+
+/* ---------------- Banca ---------------- */
+.bank-panel { flex: none; }
+.bank { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 0; }
+.bank div { background: var(--surface); border-radius: 8px; padding: 6px 8px; text-align: center; }
+.bank dt { font-size: 10.5px; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.06em; }
+.bank dd { margin: 0; font-weight: 800; font-size: 16px; }
+.bank small { color: var(--text-3); font-weight: 600; font-size: 11px; }
+
+/* ---------------- Gestión desde la ficha ---------------- */
+.deed__manage { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px 12px; background: #1c1f33; }
+.deed__manage .bh-btn { justify-content: space-between; }
+.deed__manage-note { padding: 8px 12px 10px; background: #1c1f33; color: var(--text-3); font-size: 11.5px; margin: 0; }
+.pcard__chip { border: 0; padding: 0; cursor: pointer; }
+.pcard__chip:hover { transform: scale(1.3); }

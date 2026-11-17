@@ -1,8 +1,12 @@
-# BoardHub Online — Fase 1
+# BoardHub Online
 
-Plataforma de juegos de mesa multijugador en el navegador. Primer juego: **Magnate**.
+Plataforma de juegos de mesa multijugador en el navegador.
 
-> Fase 1 = estructura + interfaz con datos simulados. No hay reglas, servidor ni multijugador todavía.
+| Juego | Estado | Reglamento |
+|---|---|---|
+| **Magnate** (compra y alquiler de propiedades) | Jugable en una misma PC, reglas clásicas completas | [docs/REGLAMENTO_MAGNATE.md](docs/REGLAMENTO_MAGNATE.md) |
+| **Comodín** (descarte por colores) | Jugable en una misma PC, reglas clásicas completas | [docs/REGLAMENTO_COMODIN.md](docs/REGLAMENTO_COMODIN.md) |
+| Conquista (estrategia territorial), Colonos (colonización y comercio), Ludo | Próximamente | — |
 
 ## Ejecutar
 
@@ -11,35 +15,33 @@ Requisitos: Node.js 18 o superior.
 ```bash
 npm install
 npm run dev        # http://localhost:5173
+npm test           # tests de los motores de reglas
 npm run build      # compila a dist/
-npm run preview    # sirve la versión compilada
 ```
 
-Rutas: `#/` (inicio y catálogo) · `#/juegos/magnate` (mesa de Magnate).
+Rutas: `#/` (inicio y catálogo) · `#/juegos/magnate` · `#/juegos/comodin`.
+La partida en curso se guarda en el navegador: si recargas, sigue donde estaba.
 
 ## Estructura
 
 ```
 src/
   app/                 Router hash mínimo y App
-  platform/            Plataforma general (no conoce reglas de ningún juego)
-    catalog/           gamesCatalog.js — registro de juegos
-    components/        Logo, SiteHeader, GameCard, GameArt
-    pages/             HomePage, GameHost (carga diferida del juego), NotFound
-  shared/              Button (con estado "pendiente"), Panel, Badge
-  styles/              variables.css (tokens de diseño), base.css
-  net/                 Comunicación online futura (sólo README)
-  games/magnate/
-    data/              board.js (40 casillas), groups.js       ← JS puro
-    models/            player.js (colores, fichas, estados)    ← JS puro
-    state/             gameState.js, selectors.js, mockScenarios.js ← JS puro
-    engine/            Motor de reglas futuro (contrato + acciones) ← JS puro
-    components/        board/, panels/, icons/ (React)
-    MagnateScreen.jsx  Pantalla de partida
-docs/                  ARQUITECTURA.md, PENDIENTES.md
+  platform/            Plataforma (inicio, catálogo, barra de juego, carga diferida)
+  shared/              Button, Panel, Badge, Modal, useLocalGame, paleta de jugadores
+  net/                 Comunicación online futura (README)
+  games/
+    magnate/
+      data/            Tablero (40 casillas), grupos, 32 cartas        ← JS puro
+      models/          Jugador                                          ← JS puro
+      state/           Estado de partida y selectores                   ← JS puro
+      engine/          Motor de reglas: applyAction(state, action, rng)  ← JS puro
+      components/      Tablero, paneles, controles, configuración (React)
+    comodin/
+      data/ engine/    Mazo de 108 cartas y motor de reglas              ← JS puro
+      components/      Cartas, configuración (React)
+tests/                 Tests de los motores (node --test, sin dependencias)
+docs/                  Arquitectura, reglamentos, pendientes
 ```
 
-Las carpetas marcadas "JS puro" no importan React ni el DOM, así que el servidor
-Node podrá importarlas tal cual.
-
-Más detalle en [`docs/ARQUITECTURA.md`](docs/ARQUITECTURA.md) y [`docs/PENDIENTES.md`](docs/PENDIENTES.md).
+Los motores no importan React ni el DOM: el futuro servidor Node los usará tal cual.

@@ -1,9 +1,14 @@
+import { useState } from 'react';
 import Logo from '../../../platform/components/Logo.jsx';
 import Button from '../../../shared/Button.jsx';
 import Badge from '../../../shared/Badge.jsx';
+import RulesModal from './panels/RulesModal.jsx';
 import { navigate } from '../../../app/router.js';
 
-export default function GameTopBar({ manifest }) {
+export default function GameTopBar({ manifest, inGame, onQuit }) {
+  const [rules, setRules] = useState(false);
+  const [confirm, setConfirm] = useState(false);
+
   return (
     <header className="game-topbar">
       <a href="#/" className="game-topbar__home" aria-label="Volver a BoardHub">
@@ -11,19 +16,34 @@ export default function GameTopBar({ manifest }) {
       </a>
       <span className="game-topbar__sep" />
       <h1 className="game-topbar__title">{manifest?.name ?? 'Magnate'}</h1>
-      <Badge tone="warn">Partida local de prueba</Badge>
-      <Badge tone="pending">Sala: sin conexión</Badge>
+      <Badge tone="ok">Partida local · misma PC</Badge>
       <div className="game-topbar__actions">
-        <Button size="sm" variant="ghost" pending pendingNote="El reglamento se documentará antes del motor de reglas">
+        <Button size="sm" variant="ghost" onClick={() => setRules(true)}>
           Reglamento
         </Button>
-        <Button size="sm" variant="ghost" pending pendingNote="Las salas privadas llegarán con el servidor">
+        <Button size="sm" variant="ghost" pending pendingNote="Las salas online llegarán con el servidor">
           Invitar amigos
         </Button>
+        {inGame &&
+          (confirm ? (
+            <>
+              <Button size="sm" variant="danger" onClick={() => { setConfirm(false); onQuit(); }}>
+                Sí, terminar partida
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setConfirm(false)}>
+                No
+              </Button>
+            </>
+          ) : (
+            <Button size="sm" variant="ghost" onClick={() => setConfirm(true)}>
+              Terminar partida
+            </Button>
+          ))}
         <Button size="sm" onClick={() => navigate('/')}>
           Salir al catálogo
         </Button>
       </div>
+      {rules && <RulesModal onClose={() => setRules(false)} />}
     </header>
   );
 }

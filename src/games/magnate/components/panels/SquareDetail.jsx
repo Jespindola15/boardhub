@@ -1,5 +1,14 @@
 import Panel from '../../../../shared/Panel.jsx';
 import Badge from '../../../../shared/Badge.jsx';
+import Button from '../../../../shared/Button.jsx';
+import {
+  ACTIONS,
+  buildBlocker,
+  sellBlocker,
+  mortgageBlocker,
+  unmortgageBlocker,
+  unmortgageCost,
+} from '../../engine/index.js';
 import SquareIcon, { iconForSquare } from '../icons/SquareIcon.jsx';
 import Token from '../board/Token.jsx';
 import { getGroup } from '../../data/groups.js';
@@ -20,7 +29,7 @@ const DESCRIPTIONS = {
 };
 
 /** Ficha informativa de la casilla seleccionada. */
-export default function SquareDetail({ state, index }) {
+export default function SquareDetail({ state, index, send }) {
   if (index == null) {
     return (
       <Panel title="Casilla" className="detail-panel">
@@ -79,6 +88,7 @@ export default function SquareDetail({ state, index }) {
             )}
           </div>
         )}
+        {owner && <ManageActions state={state} square={square} ownership={ownership} owner={owner} send={send} />}
       </div>
     </Panel>
   );
@@ -103,7 +113,7 @@ function PropertyBody({ square }) {
         <div><dt>Casa / hotel</dt><dd>{formatMoney(square.houseCost)}</dd></div>
         <div><dt>Hipoteca</dt><dd>{formatMoney(square.mortgage)}</dd></div>
       </dl>
-      <p className="deed__note">Grupo de {groupSize} propiedades. Valores provisionales hasta cerrar el reglamento.</p>
+      <p className="deed__note">Grupo de {groupSize} propiedades. Con el grupo completo y sin edificar, el alquiler se duplica.</p>
     </>
   );
 }
@@ -143,6 +153,53 @@ function UtilityBody({ square }) {
         <div><dt>Hipoteca</dt><dd>{formatMoney(square.mortgage)}</dd></div>
       </dl>
     </>
+  );
+}
+
+/** ¿Quién puede gestionar sus propiedades ahora mismo? */
+function managerOf(state) {
+  if (state.phase !== 'playing') return { id: null };
+  if (state.debts.length) return { id: state.debts[0].debtorId, debt: true };
+  if (state.auction || state.trade) return { id: null };
+  return { id: state.turn.playerId, debt: false };
+}
+
+function ManageActions({ state, square, ownership, owner, send }) {
+  const manager = managerOf(state);
+  if (manager.id !== owner.id) {
+    return <p className="deed__manage-note">Sólo {owner.name} puede gestionarla, durante su turno.</p>;
+  }
+  const build = square.type === 'property' ? buildBlocker(state, owner.id, square.index) : 'No se construye aquí.';
+  const sell = square.type === 'property' ? sellBlocker(state, owner.id, square.index) : 'No hay edificios.';
+  const mort = mortgageBlocker(state, owner.id, square.index);
+  const unmort = unmortgageBlocker(state, owner.id, square.index);
+  const act = (type) => send(type, { index: square.index });
+  const upCost = ownership.feePaid ? square.mortgage : unmortgageCost(square);
+
+  return (
+    <div className="deed__manage">
+      {square.type === 'property' && !manager.debt && (
+        <Button size="sm" onClick={() => act(ACTIONS.BUILD)} disabled={Boolean(build)} title={build ?? ''}>
+          {ownership.houses === 4 ? 'Construir hotel' : 'Construir casa'} · {formatMoney(square.houseCost)}
+        </Button>
+      )}
+      {square.type === 'property' && (
+        <Button size="sm" onClick={() => act(ACTIONS.SELL_BUILDING)} disabled={Boolean(sell)} title={sell ?? ''}>
+          Vender edificio · +{formatMoney(square.houseCost / 2)}
+        </Button>
+      )}
+      {!ownership.mortgaged ? (
+        <Button size="sm" onClick={() => act(ACTIONS.MORTGAGE)} disabled={Boolean(mort)} title={mort ?? ''}>
+          Hipotecar · +{formatMoney(square.mortgage)}
+        </Button>
+      ) : (
+        !manager.debt && (
+          <Button size="sm" onClick={() => act(ACTIONS.UNMORTGAGE)} disabled={Boolean(unmort)} title={unmort ?? ''}>
+            Levantar hipoteca · {formatMoney(upCost)}
+          </Button>
+        )
+      )}
+    </div>
   );
 }
 

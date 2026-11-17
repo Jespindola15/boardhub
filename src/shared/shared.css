@@ -23,6 +23,7 @@
   box-shadow: var(--shadow-1);
 }
 .bh-btn:active:not(:disabled) { transform: translateY(0); }
+.bh-btn:disabled:not(.bh-btn--pending) { opacity: 0.4; cursor: not-allowed; box-shadow: none; filter: saturate(0.4); }
 .bh-btn:focus-visible { outline: 2px solid var(--brand-2); outline-offset: 2px; }
 
 .bh-btn--sm { padding: 6px 10px; font-size: 12px; }
@@ -111,3 +112,33 @@
 .bh-badge--warn { color: #ffcf85; border-color: rgba(255, 181, 71, 0.35); background: rgba(255, 181, 71, 0.1); }
 .bh-badge--danger { color: #ff8fa2; border-color: rgba(255, 84, 112, 0.35); background: rgba(255, 84, 112, 0.1); }
 .bh-badge--pending { color: var(--pending); border-style: dashed; }
+
+/* ---------- Modal ---------- */
+.bh-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: rgba(4, 5, 12, 0.7);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fade-in 0.15s ease both;
+}
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+.bh-modal__box {
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(180deg, #1d2245, #151933);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-2);
+  animation: fade-up 0.25s var(--ease) both;
+}
+.bh-modal__head { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px 10px; }
+.bh-modal__head h3 { font-size: 18px; }
+.bh-modal__close { background: none; border: 0; color: var(--text-3); font-size: 16px; cursor: pointer; padding: 4px 8px; border-radius: 6px; }
+.bh-modal__close:hover { color: var(--text-1); background: var(--surface); }
+.bh-modal__body { padding: 6px 20px 16px; overflow-y: auto; }
+.bh-modal__foot { display: flex; justify-content: flex-end; align-items: center; gap: 8px; padding: 12px 20px 16px; border-top: 1px solid var(--border); }

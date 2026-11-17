@@ -273,14 +273,14 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 3.2cqmin;
-  padding: 6cqmin;
+  gap: 2.2cqmin;
+  padding: 4cqmin 6cqmin;
 }
 .center__brand { display: flex; flex-direction: column; align-items: center; gap: 0.8cqmin; }
 .center__logo {
   font-family: var(--font-display);
   font-weight: 900;
-  font-size: 11cqmin;
+  font-size: 8cqmin;
   letter-spacing: 0.08em;
   line-height: 1;
   background: linear-gradient(180deg, #ffe3a3, #ffb547 55%, #e07b00);
