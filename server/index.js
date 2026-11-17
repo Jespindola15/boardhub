@@ -1,19 +1,23 @@
 /**
- * Servidor autoritativo de BoardHub (Node + Socket.IO).
- * - Desarrollo: `npm run server` (puerto 3001); Vite reenvía /socket.io.
- * - Producción: `npm run build && npm start` sirve también la web compilada.
+ * Servidor de BoardHub para Node (desarrollo local, pruebas y túnel de Cloudflare).
+ * En producción se usa el Worker de Cloudflare (worker/), con el MISMO núcleo y protocolo.
+ *
+ *   npm run server     → :3001 (la web en desarrollo usa el proxy de Vite)
+ *   npm start          → sirve también la web compilada (dist/)
  */
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { extname, join, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { Server } from 'socket.io';
-import { RoomManager, RoomError } from './rooms.js';
+import { WebSocketServer } from 'ws';
+import { Room, RoomError, newCode, isValidCode } from './core/room.js';
+import { handleRequest, messagesFor } from './core/protocol.js';
 import { createFileStore } from './store.js';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const DIST = join(ROOT, 'dist');
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.json': 'application/json' };
+const ROOM_TTL_MS = 24 * 60 * 60 * 1000;
 
 async function serveStatic(req, res) {
   const url = new URL(req.url, 'http://x');
@@ -33,149 +37,119 @@ async function serveStatic(req, res) {
   res.end('BoardHub: compila la web con "npm run build".');
 }
 
-export function startServer({ port = 3001, dataFile = join(ROOT, 'server', 'data', 'rooms.json'), rng, rateLimit = 60 } = {}) {
-  const store = createFileStore(dataFile);
-  const rooms = new RoomManager({ rng, initial: store.load() });
-  const http = createServer((req, res) => serveStatic(req, res));
-  const io = new Server(http, {
-    cors: { origin: true },
-    // Detección rápida de desconexiones y compresión de vistas grandes.
-    pingInterval: 10000,
-    pingTimeout: 8000,
-    perMessageDeflate: { threshold: 2048 },
+function readJson(req) {
+  return new Promise((resolve) => {
+    let body = '';
+    req.on('data', (c) => (body += c.length < 10000 ? c : ''));
+    req.on('end', () => {
+      try {
+        resolve(JSON.parse(body || '{}'));
+      } catch {
+        resolve({});
+      }
+    });
   });
+}
 
-  /** playerId → Set de sockets conectados (puede haber varias pestañas). */
-  const online = new Map();
-  const onlineSet = () => new Set([...online.entries()].filter(([, s]) => s.size).map(([id]) => id));
+export function startServer({ port = 3001, dataFile = join(ROOT, 'server', 'data', 'rooms.json'), rng, rateLimit } = {}) {
+  const store = createFileStore(dataFile);
+  /** code → Room */
+  const rooms = new Map(store.load().map((d) => [d.code, new Room(d, { rng })]));
+  /** code → Set<{ ws, playerId, rate }> */
+  const conns = new Map();
+
+  const persist = () => store.save([...rooms.values()].map((r) => r.data));
+  const online = (code) => new Set([...(conns.get(code) ?? [])].map((c) => c.playerId).filter(Boolean));
+  const send = (conn, msg) => conn.ws.readyState === 1 && conn.ws.send(JSON.stringify(msg));
 
   function broadcast(room) {
-    const pub = rooms.publicRoom(room, onlineSet());
-    io.to(room.code).emit('room:update', pub);
-    for (const seat of room.seats) {
-      const view = rooms.viewFor(room, seat.playerId);
-      for (const sid of online.get(seat.playerId) ?? []) io.to(sid).emit('game:view', view);
-    }
-    store.save(rooms.serialize());
+    const set = conns.get(room.data.code) ?? new Set();
+    const on = online(room.data.code);
+    for (const c of set) for (const m of messagesFor(room, c, on)) send(c, m);
+    persist();
   }
 
-  function bind(socket, room, seat) {
-    socket.data.code = room.code;
-    socket.data.playerId = seat.playerId;
-    socket.join(room.code);
-    if (!online.has(seat.playerId)) online.set(seat.playerId, new Set());
-    online.get(seat.playerId).add(socket.id);
-  }
-
-  /** Envuelve un manejador: errores de sala → respuesta { ok:false, error }. */
-  const RATE_LIMIT = rateLimit;
-  const handle = (fn) =>
-    function (payload, ack) {
-    const reply = typeof ack === 'function' ? ack : () => {};
-    const rate = this.data.rate;
-    const t = Date.now();
-    if (t - rate.windowStart > 1000) {
-      rate.windowStart = t;
-      rate.count = 0;
-    }
-    if (++rate.count > RATE_LIMIT) {
-      reply({ ok: false, error: 'Demasiadas acciones seguidas: espera un momento.' });
+  const http = createServer(async (req, res) => {
+    if (req.method === 'POST' && req.url === '/api/rooms') {
+      const body = await readJson(req);
+      res.setHeader('Content-Type', 'application/json');
+      try {
+        let code;
+        do code = newCode();
+        while (rooms.has(code));
+        const { room, seat } = Room.create({ code, gameId: body.gameId, name: body.name, options: body.options }, { rng });
+        rooms.set(code, room);
+        persist();
+        res.end(JSON.stringify({ ok: true, code, playerId: seat.playerId, token: seat.token }));
+      } catch (e) {
+        res.statusCode = e instanceof RoomError ? 400 : 500;
+        res.end(JSON.stringify({ ok: false, error: e instanceof RoomError ? e.message : 'Error interno del servidor.' }));
+      }
       return;
     }
-    try {
-      reply(fn(payload ?? {}) ?? { ok: true });
-    } catch (e) {
-      if (e instanceof RoomError) reply({ ok: false, error: e.message });
-      else {
-        console.error(e);
-        reply({ ok: false, error: 'Error interno del servidor.' });
+    serveStatic(req, res);
+  });
+
+  const wss = new WebSocketServer({ noServer: true, perMessageDeflate: { threshold: 2048 } });
+  http.on('upgrade', (req, socket, head) => {
+    const m = req.url.match(/^\/ws\/([A-Za-z0-9]{6})(?:\?.*)?$/);
+    const code = m?.[1].toUpperCase();
+    if (!code || !isValidCode(code)) return socket.destroy();
+    wss.handleUpgrade(req, socket, head, (ws) => {
+      if (!rooms.has(code)) {
+        ws.send(JSON.stringify({ ev: 'room:missing', data: { code } }));
+        ws.close(4004, 'sala inexistente');
+        return;
       }
-    }
-  };
+      const conn = { ws, playerId: null };
+      if (!conns.has(code)) conns.set(code, new Set());
+      conns.get(code).add(conn);
+      ws.isAlive = true;
+      ws.on('pong', () => (ws.isAlive = true));
 
-  io.on('connection', (socket) => {
-    // Límite de frecuencia por conexión (ventana de 1 s); se responde con error, nunca se deja colgado.
-    socket.data.rate = { windowStart: Date.now(), count: 0 };
+      ws.on('message', (raw) => {
+        let msg;
+        try {
+          msg = JSON.parse(raw);
+        } catch {
+          return;
+        }
+        const room = rooms.get(code);
+        if (!room) return;
+        const before = conn.playerId;
+        const r = handleRequest(room, conn, msg.ev, msg.payload, rateLimit ? { rateLimit } : undefined);
+        send(conn, { re: msg.id, data: r.reply });
+        if (r.kicked) for (const c of conns.get(code)) if (c.playerId === r.kicked) {
+          send(c, { ev: 'room:removed', data: {} });
+          c.playerId = null;
+        }
+        if (r.changed || before !== conn.playerId) broadcast(room);
+        else if (r.resend) for (const m2 of messagesFor(room, conn, online(code))) send(conn, m2);
+        if (room.empty) rooms.delete(code);
+      });
 
-    const mine = () => {
-      if (!socket.data.code) throw new RoomError('No estás en ninguna sala.');
-      return rooms.get(socket.data.code);
-    };
-
-    socket.on('room:create', handle(({ gameId, name, options }) => {
-      const { room, seat } = rooms.create({ gameId, name, options });
-      bind(socket, room, seat);
-      broadcast(room);
-      return { ok: true, code: room.code, playerId: seat.playerId, token: seat.token };
-    }));
-
-    socket.on('room:join', handle(({ code, name }) => {
-      const { room, seat } = rooms.join({ code, name });
-      bind(socket, room, seat);
-      broadcast(room);
-      return { ok: true, code: room.code, playerId: seat.playerId, token: seat.token };
-    }));
-
-    socket.on('room:resume', handle(({ code, token }) => {
-      const room = rooms.get(code);
-      const seat = rooms.seatByToken(room, token);
-      bind(socket, room, seat);
-      broadcast(room);
-      return { ok: true, code: room.code, playerId: seat.playerId };
-    }));
-
-    socket.on('room:options', handle(({ options }) => {
-      const room = mine();
-      rooms.setOptions(room, socket.data.playerId, options);
-      broadcast(room);
-    }));
-
-    socket.on('room:start', handle(() => {
-      const room = mine();
-      rooms.start(room, socket.data.playerId);
-      broadcast(room);
-    }));
-
-    socket.on('room:leave', handle(() => {
-      const room = mine();
-      rooms.leave(room, socket.data.playerId);
-      online.get(socket.data.playerId)?.delete(socket.id);
-      socket.leave(room.code);
-      socket.data.code = null;
-      if (rooms.rooms.has(room.code)) broadcast(room);
-    }));
-
-    socket.on('room:remove', handle(({ playerId }) => {
-      const room = mine();
-      rooms.remove(room, socket.data.playerId, playerId);
-      for (const sid of online.get(playerId) ?? []) io.sockets.sockets.get(sid)?.emit('room:removed');
-      broadcast(room);
-    }));
-
-    socket.on('game:action', handle(({ clientActionId, type, payload, expectedVersion }) => {
-      const room = mine();
-      const result = rooms.act(room, socket.data.playerId, { clientActionId, type, payload, expectedVersion });
-      if (result.ok && !result.duplicate) broadcast(room);
-      return result;
-    }));
-
-    socket.on('sync', handle(() => {
-      // El cliente pide la vista actual (p. ej. tras volver de segundo plano).
-      const room = mine();
-      socket.emit('room:update', rooms.publicRoom(room, onlineSet()));
-      socket.emit('game:view', rooms.viewFor(room, socket.data.playerId));
-    }));
-
-    socket.on('disconnect', () => {
-      const { playerId, code } = socket.data;
-      if (!playerId) return;
-      online.get(playerId)?.delete(socket.id);
-      if (code && rooms.rooms.has(code)) broadcast(rooms.get(code));
+      ws.on('close', () => {
+        conns.get(code)?.delete(conn);
+        const room = rooms.get(code);
+        if (room && conn.playerId) broadcast(room);
+      });
     });
   });
 
-  const sweeper = setInterval(() => rooms.sweep(), 60 * 60 * 1000);
-  sweeper.unref();
+  // Latido: detecta conexiones muertas cada 10 s.
+  const heartbeat = setInterval(() => {
+    for (const ws of wss.clients) {
+      if (!ws.isAlive) {
+        ws.terminate();
+        continue;
+      }
+      ws.isAlive = false;
+      ws.ping();
+    }
+    const limit = Date.now() - ROOM_TTL_MS;
+    for (const [code, room] of rooms) if (room.data.updatedAt < limit && !conns.get(code)?.size) rooms.delete(code);
+  }, 10000);
+  heartbeat.unref();
 
   return new Promise((resolve) => {
     http.listen(port, () =>
@@ -185,8 +159,10 @@ export function startServer({ port = 3001, dataFile = join(ROOT, 'server', 'data
         close: () =>
           new Promise((done) => {
             store.flush();
-            clearInterval(sweeper);
-            io.close(() => done());
+            clearInterval(heartbeat);
+            for (const ws of wss.clients) ws.terminate();
+            wss.close();
+            http.close(() => done());
           }),
       }),
     );

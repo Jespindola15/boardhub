@@ -1,0 +1,203 @@
+/**
+ * Lógica de UNA sala, portable: corre igual en Node (desarrollo, pruebas, túnel)
+ * y en un Durable Object de Cloudflare (producción). Sólo usa Web Crypto.
+ *
+ * RoomData (JSON, se guarda tal cual) = {
+ *   code, gameId, options, status: 'lobby' | 'playing' | 'finished',
+ *   hostId, seats: [{ playerId, name, colorId, token }],
+ *   state, processed: [[clientActionId, result]], updatedAt
+ * }
+ */
+import { GAMES } from '../games.js';
+
+export class RoomError extends Error {}
+const fail = (m) => {
+  throw new RoomError(m);
+};
+
+/** Azar del servidor (criptográfico). Nunca viene del cliente. */
+export function serverRng() {
+  const a = new Uint32Array(1);
+  crypto.getRandomValues(a);
+  return a[0] / 2 ** 32;
+}
+const randInt = (n) => Math.floor(serverRng() * n);
+
+const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // sin 0/O ni 1/I
+const PALETTE = ['violet', 'teal', 'amber', 'rose', 'sky', 'lime', 'coral', 'snow', 'gold', 'mint'];
+const MAX_REMEMBERED_ACTIONS = 200;
+
+export function newCode() {
+  let c = '';
+  for (let i = 0; i < 6; i++) c += CODE_ALPHABET[randInt(CODE_ALPHABET.length)];
+  return c;
+}
+export const isValidCode = (code) => /^[A-HJ-NP-Z2-9]{6}$/.test(String(code ?? ''));
+
+const newPlayerId = () => `u${Array.from({ length: 8 }, () => randInt(16).toString(16)).join('')}`;
+
+function cleanName(name) {
+  const n = String(name ?? '').replace(/\s+/g, ' ').trim().slice(0, 16);
+  if (!n) fail('Escribe un nombre.');
+  return n;
+}
+
+export class Room {
+  /** @param {object} data RoomData @param {{rng?, now?}} env */
+  constructor(data, { rng = serverRng, now = () => Date.now() } = {}) {
+    this.data = data;
+    this.rng = rng;
+    this.now = now;
+  }
+
+  static create({ code, gameId, name, options }, env) {
+    const game = GAMES[gameId];
+    if (!game) fail('Ese juego todavía no se puede jugar en línea.');
+    const room = new Room(
+      {
+        code,
+        gameId,
+        options: game.validateOptions ? game.validateOptions(options) : {},
+        status: 'lobby',
+        hostId: null,
+        seats: [],
+        state: null,
+        processed: [],
+        updatedAt: 0,
+      },
+      env,
+    );
+    const seat = room.addSeat(name);
+    room.data.hostId = seat.playerId;
+    return { room, seat };
+  }
+
+  get game() {
+    return GAMES[this.data.gameId];
+  }
+
+  touch() {
+    this.data.updatedAt = this.now();
+  }
+
+  seatByToken(token) {
+    const seat = token && this.data.seats.find((s) => s.token === token);
+    if (!seat) fail('Tu sesión en esta sala no es válida.');
+    return seat;
+  }
+
+  addSeat(name) {
+    const d = this.data;
+    const n = cleanName(name);
+    if (d.status !== 'lobby') fail('La partida ya empezó.');
+    if (d.seats.length >= this.game.players.max) fail(`La sala está completa (máximo ${this.game.players.max}).`);
+    if (d.seats.some((s) => s.name.toLowerCase() === n.toLowerCase())) fail('Ya hay alguien con ese nombre en la sala.');
+    const used = new Set(d.seats.map((s) => s.colorId));
+    const seat = { playerId: newPlayerId(), name: n, colorId: PALETTE.find((c) => !used.has(c)), token: crypto.randomUUID() };
+    d.seats.push(seat);
+    this.touch();
+    return seat;
+  }
+
+  setOptions(playerId, options) {
+    const d = this.data;
+    if (d.hostId !== playerId) fail('Sólo el anfitrión cambia las opciones.');
+    if (d.status !== 'lobby') fail('La partida ya empezó.');
+    d.options = this.game.validateOptions ? this.game.validateOptions(options) : {};
+    this.touch();
+  }
+
+  start(playerId) {
+    const d = this.data;
+    if (d.hostId !== playerId) fail('Sólo el anfitrión puede empezar.');
+    if (d.status !== 'lobby') fail('La partida ya empezó.');
+    if (d.seats.length < this.game.players.min) fail(`Hacen falta al menos ${this.game.players.min} jugadores.`);
+    d.state = this.game.setup({
+      id: d.code,
+      players: d.seats.map((s) => ({ id: s.playerId, name: s.name, colorId: s.colorId })),
+      options: d.options,
+      rng: this.rng,
+    });
+    d.status = 'playing';
+    this.touch();
+  }
+
+  /**
+   * Aplica una intención. El `playerId` lo pone el servidor.
+   * - `clientActionId`: una acción repetida (reintento, doble envío) no se aplica dos veces.
+   * - `expectedVersion`: no se aplica una acción decidida sobre un estado que el jugador no vio.
+   */
+  act(playerId, { clientActionId, type, payload, expectedVersion }) {
+    const d = this.data;
+    if (d.status !== 'playing') fail('La partida no está en curso.');
+    if (clientActionId) {
+      const seen = d.processed.find(([id]) => id === clientActionId);
+      if (seen) return { ...seen[1], duplicate: true };
+    }
+    if (expectedVersion != null && expectedVersion !== d.state.version) {
+      return { ok: false, stale: true, error: 'La mesa cambió mientras jugabas: revisa y vuelve a intentarlo.' };
+    }
+    const r = this.game.applyAction(d.state, { type, playerId, payload }, this.rng);
+    const result = r.ok ? { ok: true } : { ok: false, error: r.error };
+    if (r.ok) {
+      d.state = r.state;
+      if (this.game.getResult(d.state)) d.status = 'finished';
+    }
+    if (clientActionId) {
+      d.processed.push([clientActionId, result]);
+      if (d.processed.length > MAX_REMEMBERED_ACTIONS) d.processed.shift();
+    }
+    this.touch();
+    return result;
+  }
+
+  /** Política de plataforma: salir (en la sala de espera libera el asiento; en partida, removePlayer). */
+  leave(playerId) {
+    const d = this.data;
+    if (d.status === 'lobby') {
+      d.seats = d.seats.filter((s) => s.playerId !== playerId);
+      if (d.hostId === playerId) d.hostId = d.seats[0]?.playerId ?? null;
+    } else if (d.status === 'playing') {
+      const r = this.game.removePlayer(d.state, playerId, this.rng);
+      if (r.ok) d.state = r.state;
+      if (this.game.getResult(d.state)) d.status = 'finished';
+      if (d.hostId === playerId) d.hostId = d.seats.find((s) => s.playerId !== playerId)?.playerId ?? null;
+    }
+    this.touch();
+  }
+
+  remove(hostId, playerId) {
+    const d = this.data;
+    if (d.hostId !== hostId) fail('Sólo el anfitrión puede quitar jugadores.');
+    if (playerId === hostId) fail('No puedes quitarte a ti mismo; usa "Salir".');
+    const target = d.seats.find((s) => s.playerId === playerId);
+    if (!target) fail('Ese jugador no está en la sala.');
+    if (d.status === 'lobby') d.seats = d.seats.filter((s) => s.playerId !== playerId);
+    else this.leave(playerId);
+    target.token = null; // su sesión deja de valer
+    this.touch();
+  }
+
+  get empty() {
+    return this.data.seats.length === 0;
+  }
+
+  /** Información pública (sin tokens ni estado del juego). */
+  publicRoom(online = new Set()) {
+    const d = this.data;
+    const left = new Set((d.state?.players ?? []).filter((p) => p.left || p.status === 'bankrupt').map((p) => p.id));
+    return {
+      code: d.code,
+      gameId: d.gameId,
+      status: d.status,
+      hostId: d.hostId,
+      options: d.options,
+      limits: this.game.players,
+      seats: d.seats.map((s) => ({ playerId: s.playerId, name: s.name, colorId: s.colorId, connected: online.has(s.playerId), left: left.has(s.playerId) })),
+    };
+  }
+
+  viewFor(playerId) {
+    return this.data.state ? this.game.getPlayerView(this.data.state, playerId) : null;
+  }
+}

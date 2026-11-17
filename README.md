@@ -19,20 +19,14 @@ npm run dev        # web en http://localhost:5173 (en otra terminal)
 npm test           # pruebas de motores y servidor
 ```
 
-Producción (un solo proceso sirve la web y el juego en línea):
+**Publicar en Cloudflare Workers** (siempre encendido, `https://boardhub.<tu-subdominio>.workers.dev`):
 
 ```bash
-npm run build
-npm start          # http://localhost:3001  (PORT para cambiar el puerto)
+npx wrangler login
+npm run deploy
 ```
 
-Jugar con amigos por internet (túnel gratuito de Cloudflare, requiere `cloudflared`):
-
-```bash
-npm run compartir  # compila, arranca el servidor y muestra una dirección https pública
-```
-
-Otras opciones (dominio propio, Render/Railway/Fly.io con el Dockerfile): `docs/DESPLIEGUE.md`.
+Otras opciones (túnel desde tu PC con `npm run compartir`, Docker): `docs/DESPLIEGUE.md`.
 
 Rutas: `#/` · `#/salas` · `#/sala/CODIGO` · `#/juegos/magnate` · `#/juegos/ultima-carta`.
 La partida en curso se guarda en el navegador: si recargas, sigue donde estaba.
@@ -55,7 +49,9 @@ src/
     ultima-carta/
       data/ engine/    Mazo de 108 cartas y motor con vistas privadas    ← JS puro
       components/      Mesa, cartas, configuración (React)
-server/                Servidor autoritativo: salas, reconexión, guardado
+server/core/           Núcleo de salas y protocolo (compartido)
+server/index.js        Servidor Node (desarrollo, pruebas, túnel)
+worker/                Cloudflare Worker + Durable Object por sala (producción)
 tests/                 Tests de los motores (node --test, sin dependencias)
 docs/                  Arquitectura, reglamentos, pendientes
 ```
