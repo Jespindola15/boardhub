@@ -12,9 +12,7 @@ export default function SiteHeader() {
         <nav className="site-nav" aria-label="Principal">
           <a href="#/" className="site-nav__link is-active">Inicio</a>
           <a href="#catalogo" className="site-nav__link" onClick={scrollToCatalog}>Juegos</a>
-          <span className="site-nav__link is-disabled" title="Pendiente: disponible en una fase futura">
-            Salas <small>pendiente</small>
-          </span>
+          <a href="#/salas" className="site-nav__link">Salas</a>
         </nav>
         <div className="site-header__actions">
           <Button variant="ghost" size="sm" pending pendingNote="El sistema de cuentas llegará más adelante">

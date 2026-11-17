@@ -33,19 +33,19 @@ function WildGem() {
 }
 
 /**
- * Carta de Comodín. `back` dibuja el dorso.
+ * Carta de Última Carta. `back` dibuja el dorso.
  * `playable` resalta la carta; `onClick` la vuelve interactiva.
  */
-export default function Card({ card, back = false, playable = false, dim = false, onClick, size = 'md', chosenColor, style }) {
+export default function Card({ card, back = false, playable = false, dim = false, onClick, size = 'md', chosenColor, style, className = '' }) {
   if (back) {
     return (
-      <span className={`ccard ccard--back ccard--${size}`} style={style}>
+      <span className={`ccard ccard--back ccard--${size} ${className}`} style={style}>
         <span className="ccard__back-mark">C</span>
       </span>
     );
   }
   const wild = !card.color;
-  const classes = ['ccard', `ccard--${size}`, wild ? 'ccard--wild' : '', playable ? 'is-playable' : '', dim ? 'is-dim' : '', onClick ? 'is-clickable' : '']
+  const classes = ['ccard', `ccard--${size}`, wild ? 'ccard--wild' : '', playable ? 'is-playable' : '', dim ? 'is-dim' : '', onClick ? 'is-clickable' : '', className]
     .filter(Boolean)
     .join(' ');
   const Tag = onClick ? 'button' : 'span';

@@ -16,6 +16,7 @@ import { getSquare, SQUARE_TYPES, getSquaresByGroup, GO_SALARY } from '../../dat
 import { getOwner, getOwnership } from '../../state/selectors.js';
 import { HOTEL } from '../../state/gameState.js';
 import { formatMoney } from '../format.js';
+import { useSeat } from '../seat.js';
 
 const RENT_LABELS = ['Alquiler', 'Con 1 casa', 'Con 2 casas', 'Con 3 casas', 'Con 4 casas', 'Con hotel'];
 
@@ -164,7 +165,9 @@ function UtilityBody({ square }) {
  * en cualquier momento, también fuera del propio turno. El motor valida cada acción.
  */
 function ManageActions({ state, square, ownership, owner, send }) {
+  const { canAct } = useSeat();
   if (state.phase !== 'playing') return null;
+  if (!canAct(owner.id)) return <p className="deed__manage-note">Sólo {owner.name} puede gestionarla.</p>;
   const build = square.type === 'property' ? buildBlocker(state, owner.id, square.index) : 'No se construye aquí.';
   const sell = square.type === 'property' ? sellBlocker(state, owner.id, square.index) : 'No hay edificios.';
   const mort = mortgageBlocker(state, owner.id, square.index);

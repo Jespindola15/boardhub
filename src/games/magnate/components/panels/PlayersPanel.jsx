@@ -5,6 +5,7 @@ import { getPlayerColor, PLAYER_STATUS, PLAYER_STATUS_LABEL } from '../../models
 import { getPlayerSquares, getNetWorth } from '../../state/selectors.js';
 import { getGroup } from '../../data/groups.js';
 import { formatMoney } from '../format.js';
+import { useSeat } from '../seat.js';
 
 const STATUS_TONE = {
   [PLAYER_STATUS.ACTIVE]: 'ok',
@@ -57,6 +58,7 @@ function PlayerCard({ player, order, state, isTurn, isActing, isHighlighted, onH
         <div className="pcard__row">
           <span className="pcard__name">
             {player.name}
+            <YouTag id={player.id} />
             {player.isHost && <span className="pcard__host" title="Anfitrión de la sala">★</span>}
           </span>
           <span className={`pcard__money ${player.money < 200 ? 'is-low' : ''}`}>{formatMoney(player.money)}</span>
@@ -93,4 +95,9 @@ function PlayerCard({ player, order, state, isTurn, isActing, isHighlighted, onH
       <span className="pcard__order">{order}</span>
     </article>
   );
+}
+
+function YouTag({ id }) {
+  const { me } = useSeat();
+  return me === id ? <small className="pcard__you"> (tú)</small> : null;
 }

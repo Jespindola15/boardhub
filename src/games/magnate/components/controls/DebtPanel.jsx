@@ -3,6 +3,7 @@ import Button from '../../../../shared/Button.jsx';
 import { getPlayer } from '../../state/selectors.js';
 import { ACTIONS, maxRaisable, totalDebt } from '../../engine/index.js';
 import { formatMoney } from '../format.js';
+import { useSeat } from '../seat.js';
 
 /** Deudas pendientes. Puede haber varias a la vez (p. ej. una carta que obliga a pagar a cada jugador). */
 export default function DebtPanel({ state, send }) {
@@ -31,6 +32,7 @@ function DebtorRow({ state, id, send }) {
   const owed = totalDebt(state, id);
   const canRaise = maxRaisable(state, id) >= owed;
   const to = (d) => (d.creditorId ? getPlayer(state, d.creditorId).name : 'la banca');
+  const { canAct } = useSeat();
 
   return (
     <div className="debt-row">
@@ -43,7 +45,7 @@ function DebtorRow({ state, id, send }) {
           </span>
         ))}
       </div>
-      <div className="auction__row">
+      <div className="auction__row" hidden={!canAct(id)}>
         <Button variant="primary" size="sm" onClick={() => send(ACTIONS.PAY_DEBT, {}, id)} disabled={p.money < first.amount}>
           Pagar {formatMoney(first.amount)} a {to(first)}
         </Button>

@@ -6,6 +6,7 @@ import { getGroup } from '../../data/groups.js';
 import { getPlayer } from '../../state/selectors.js';
 import { ACTIONS, AUCTION_MIN_BID } from '../../engine/index.js';
 import { formatMoney } from '../format.js';
+import { useSeat } from '../seat.js';
 
 /**
  * Subasta abierta (G0009): sin orden de turno, desde $10, subiendo al menos $1.
@@ -50,6 +51,7 @@ function BidderRow({ state, id, min, send }) {
   const a = state.auction;
   const p = getPlayer(state, id);
   const [custom, setCustom] = useState('');
+  const { canAct } = useSeat();
   const isLeader = a.highBidderId === id;
   const passed = a.passed.includes(id);
   const quick = [min, a.highBid + 10, a.highBid + 50].filter((v, i, arr) => v >= min && arr.indexOf(v) === i && v <= p.money);
@@ -63,6 +65,8 @@ function BidderRow({ state, id, min, send }) {
       </span>
       {isLeader ? (
         <span className="auction__tag">Mejor oferta</span>
+      ) : !canAct(id) ? (
+        <span className="auction__tag auction__tag--muted">{passed ? 'No sube' : 'Puede pujar'}</span>
       ) : (
         <span className="auction__btns">
           {quick.map((v) => (

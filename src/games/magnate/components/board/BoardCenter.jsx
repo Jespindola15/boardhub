@@ -11,6 +11,7 @@ import { getCurrentPlayer, getPlayer } from '../../state/selectors.js';
 import { ACTIONS, getActingPlayerId, JAIL_FINE } from '../../engine/index.js';
 import { BOARD } from '../../data/board.js';
 import { formatMoney } from '../format.js';
+import { useSeat } from '../seat.js';
 
 /**
  * Centro del tablero: estado del turno, dados y controles.
@@ -23,8 +24,8 @@ export default function BoardCenter({ state, send, onOpenTrade, onNewGame }) {
 
   return (
     <div className="center">
-      <Deck kind="chance" label="Fortuna" remaining={state.decks.chance.length} />
-      <Deck kind="community" label="Arca Vecinal" remaining={state.decks.community.length} />
+      <Deck kind="chance" label="Fortuna" remaining={deckCount(state.decks.chance)} />
+      <Deck kind="community" label="Arca Vecinal" remaining={deckCount(state.decks.community)} />
 
       <div className="center__brand">
         <span className="center__logo">MAGNATE</span>
@@ -73,13 +74,17 @@ export default function BoardCenter({ state, send, onOpenTrade, onNewGame }) {
 
 function TurnActions({ state, send, player, onOpenTrade }) {
   const [confirmResign, setConfirmResign] = useState(false);
+  const { me, online, canAct } = useSeat();
+  const mine = canAct(player.id);
+  const meAlive = !online || state.players.some((p) => p.id === me && p.status !== 'bankrupt');
   const step = state.turn.step;
   const inJail = player.status === 'in-jail';
 
   return (
     <div className="center__actions">
+      {!mine && <p className="center__waiting">Esperando a {player.name}…</p>}
       <div className="center__primary">
-        {step === 'roll' && inJail && (
+        {mine && step === 'roll' && inJail && (
           <>
             <Button onClick={() => send(ACTIONS.PAY_JAIL_FINE)} disabled={player.money < JAIL_FINE}>
               Pagar {formatMoney(JAIL_FINE)}
@@ -92,26 +97,26 @@ function TurnActions({ state, send, player, onOpenTrade }) {
             </Button>
           </>
         )}
-        {step === 'roll' && !inJail && (
+        {mine && step === 'roll' && !inJail && (
           <Button variant="primary" size="lg" className="span-2" onClick={() => send(ACTIONS.ROLL_DICE)}>
             {state.turn.extraRoll ? '¡Dobles! Tirar otra vez' : 'Tirar dados'}
           </Button>
         )}
-        {step === 'buy' && <BuyChoice state={state} send={send} player={player} />}
-        {step === 'end' && (
+        {mine && step === 'buy' && <BuyChoice state={state} send={send} player={player} />}
+        {mine && step === 'end' && (
           <Button variant="primary" size="lg" className="span-2" onClick={() => send(ACTIONS.END_TURN)}>
             Terminar turno
           </Button>
         )}
       </div>
 
-      <div className="center__secondary">
+      <div className="center__secondary" hidden={!meAlive}>
         <Button size="sm" variant="ghost" onClick={onOpenTrade}>
           Negociar
         </Button>
         {confirmResign ? (
           <>
-            <Button size="sm" variant="danger" onClick={() => send(ACTIONS.RESIGN, {}, player.id)}>
+            <Button size="sm" variant="danger" onClick={() => send(ACTIONS.RESIGN, {}, online ? me : player.id)}>
               Confirmar abandono
             </Button>
             <Button size="sm" variant="ghost" onClick={() => setConfirmResign(false)}>
@@ -151,6 +156,8 @@ function BuyChoice({ state, send, player }) {
   );
 }
 
+const deckCount = (d) => (typeof d === 'number' ? d : d.length);
+
 function Winner({ state, onNewGame }) {
   const w = getPlayer(state, state.winnerId);
   return (
@@ -158,9 +165,11 @@ function Winner({ state, onNewGame }) {
       <Token player={w} isCurrent className="token--winner" />
       <h3>¡{w.name} gana la partida!</h3>
       <p>Es el último jugador que queda en pie, tras {state.turn.round} rondas.</p>
-      <Button variant="primary" size="lg" onClick={onNewGame}>
-        Nueva partida
-      </Button>
+      {onNewGame && (
+        <Button variant="primary" size="lg" onClick={onNewGame}>
+          Nueva partida
+        </Button>
+      )}
     </div>
   );
 }

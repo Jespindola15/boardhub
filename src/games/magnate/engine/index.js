@@ -852,3 +852,51 @@ export function getPendingDeciders(state) {
 export function getActingPlayerId(state) {
   return getPendingDeciders(state)[0] ?? null;
 }
+
+/* ------------------------------------------------------------------ */
+/* Contrato común de BoardHub (modo online)                            */
+/* ------------------------------------------------------------------ */
+
+import { createGameState as _create } from '../state/gameState.js';
+
+/**
+ * Vista de un jugador. En Monopoly el dinero, las propiedades y las cartas de libertad
+ * son públicos; lo único oculto es el ORDEN de los mazos, que se reduce a su tamaño.
+ */
+export function getPlayerView(state, viewerId) {
+  const { decks, ...rest } = state;
+  return {
+    ...rest,
+    decks: { chance: decks.chance.length, community: decks.community.length },
+    me: viewerId,
+    deciders: getPendingDeciders(state),
+    log: state.log.slice(-60),
+  };
+}
+
+export function getResult(state) {
+  return state.phase === 'finished' ? { winners: [state.winnerId] } : null;
+}
+
+/** Política de plataforma: quien se va de la sala abandona (= bancarrota ante la banca). */
+export function removePlayer(state, playerId, rng) {
+  const p = state.players.find((x) => x.id === playerId);
+  if (!p || p.status === PLAYER_STATUS.BANKRUPT || state.phase !== 'playing') return { ok: true, state };
+  return applyAction(state, { type: ACTIONS.RESIGN, playerId }, rng);
+}
+
+export const definition = {
+  id: 'magnate',
+  players: { min: 2, max: 8 },
+  edition: 'Hasbro G0009',
+  setup: ({ id, players, options, rng }) =>
+    _create({ id, rng, options, players: players.map((p, i) => ({ ...p, tokenId: TOKEN_IDS[i % TOKEN_IDS.length] })) }),
+  applyAction,
+  getPlayerView,
+  getPendingDeciders,
+  getResult,
+  removePlayer,
+  validateOptions: (o = {}) => ({ skipPurchase: Boolean(o.skipPurchase) }),
+};
+
+const TOKEN_IDS = ['crown', 'rocket', 'anchor', 'star', 'diamond', 'bolt', 'heart', 'moon'];

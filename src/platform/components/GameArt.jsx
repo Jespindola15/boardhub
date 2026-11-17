@@ -14,6 +14,10 @@ export default function GameArt({ art }) {
       return <ComodinArt />;
     case 'colonos':
       return <ColonosArt />;
+    case 'misterio':
+      return <MisterioArt />;
+    case 'rutas':
+      return <RutasArt />;
     default:
       return null;
   }
@@ -141,6 +145,38 @@ function ColonosArt() {
       {tiles.map(([x, y, f]) => hex(x, y, f))}
       <circle cx="160" cy="92" r="12" fill="#fff" />
       <text x="160" y="97" textAnchor="middle" fontSize="13" fontWeight="800" fill="#b91c1c">8</text>
+    </svg>
+  );
+}
+
+function MisterioArt() {
+  return (
+    <svg viewBox="0 0 320 180" className="game-art" aria-hidden="true">
+      <rect width="320" height="180" fill="#1b1430" />
+      {[0, 1, 2].map((r) =>
+        [0, 1, 2, 3].map((c) => (
+          <rect key={`${r}${c}`} x={70 + c * 46} y={22 + r * 46} width="42" height="42" rx="4" fill={(r + c) % 2 ? '#2a2046' : '#33285a'} />
+        )),
+      )}
+      <circle cx="160" cy="90" r="34" fill="none" stroke="#a78bfa" strokeWidth="8" />
+      <path d="M184 114 L216 146" stroke="#a78bfa" strokeWidth="12" strokeLinecap="round" />
+      <text x="160" y="101" textAnchor="middle" fontSize="30" fontWeight="900" fill="#f5f3ff">?</text>
+    </svg>
+  );
+}
+
+function RutasArt() {
+  const cities = [[60, 60], [130, 40], [210, 70], [260, 130], [150, 130], [80, 140]];
+  const routes = [[0, 1, '#ef4444'], [1, 2, '#3b82f6'], [2, 3, '#facc15'], [3, 4, '#22c55e'], [4, 5, '#a78bfa'], [5, 0, '#f97316'], [1, 4, '#e5e7eb']];
+  return (
+    <svg viewBox="0 0 320 180" className="game-art" aria-hidden="true">
+      <rect width="320" height="180" fill="#0f2a3a" />
+      {routes.map(([a, b, c]) => (
+        <line key={`${a}${b}`} x1={cities[a][0]} y1={cities[a][1]} x2={cities[b][0]} y2={cities[b][1]} stroke={c} strokeWidth="8" strokeDasharray="14 4" />
+      ))}
+      {cities.map(([x, y]) => (
+        <circle key={`${x}${y}`} cx={x} cy={y} r="8" fill="#f8fafc" stroke="#0f2a3a" strokeWidth="3" />
+      ))}
     </svg>
   );
 }

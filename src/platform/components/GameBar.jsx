@@ -9,7 +9,7 @@ import './platform.css';
  * Barra superior común a todas las pantallas de juego.
  * `actions` se inserta antes de los botones estándar.
  */
-export default function GameBar({ title, accent = 'var(--brand-3)', inGame, onQuit, actions }) {
+export default function GameBar({ title, accent = 'var(--brand-3)', inGame, onQuit, actions, badge = 'Partida local · misma PC', invite = true }) {
   const [confirm, setConfirm] = useState(false);
   return (
     <header className="game-bar">
@@ -20,12 +20,14 @@ export default function GameBar({ title, accent = 'var(--brand-3)', inGame, onQu
       <h1 className="game-bar__title" style={{ color: accent }}>
         {title}
       </h1>
-      <Badge tone="ok">Partida local · misma PC</Badge>
+      {badge && <Badge tone="ok">{badge}</Badge>}
       <div className="game-bar__actions">
         {actions}
-        <Button size="sm" variant="ghost" pending pendingNote="Las salas online llegarán con el servidor">
-          Invitar amigos
-        </Button>
+        {invite === true && (
+          <Button size="sm" variant="ghost" pending pendingNote="Este juego todavía no tiene modo online">
+            Invitar amigos
+          </Button>
+        )}
         {inGame &&
           (confirm ? (
             <>

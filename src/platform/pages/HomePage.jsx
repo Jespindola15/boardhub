@@ -23,7 +23,7 @@ export default function HomePage() {
       <main className="home__main">
         <section className="hero">
           <div className="hero__copy">
-            <Badge tone="brand">Fase 2 · Juego local</Badge>
+            <Badge tone="brand">Salas online disponibles</Badge>
             <h1 className="hero__title">
               Juegos de mesa con tus amigos,
               <br />
@@ -31,7 +31,7 @@ export default function HomePage() {
             </h1>
             <p className="hero__lead">
               BoardHub es una plataforma de juegos de mesa multijugador. Sin descargas, sin instalaciones y sin
-              registro obligatorio. Ya puedes jugar <strong>Magnate</strong> y <strong>Comodín</strong> en una misma PC.
+              registro obligatorio. Ya puedes jugar <strong>Magnate</strong> en una misma PC y <strong>Última Carta</strong> en línea con tus amigos.
             </p>
             <div className="hero__actions">
               <Button variant="primary" size="lg" onClick={() => navigate('/juegos/magnate')}>
@@ -64,10 +64,10 @@ export default function HomePage() {
 
         <section className="how">
           <div className="section-head">
-            <h2>Así funcionará el juego online</h2>
+            <h2>Así funciona el juego online</h2>
             <p>
-              Hoy se juega en una misma PC pasándose el turno. Las salas online usarán exactamente los mismos motores de
-              reglas, ejecutados en el servidor.
+              El servidor ejecuta las reglas y cada jugador sólo recibe lo que le corresponde ver. Por ahora, en línea:
+              Última Carta.
             </p>
           </div>
           <ol className="how__steps">
@@ -76,7 +76,7 @@ export default function HomePage() {
                 <span className="how__n">{s.n}</span>
                 <h3>{s.title}</h3>
                 <p>{s.text}</p>
-                <Badge tone="pending">Pendiente</Badge>
+                <Badge tone="ok">Disponible</Badge>
               </li>
             ))}
           </ol>

@@ -1,9 +1,7 @@
 /**
- * Mazo de Comodín (108 cartas), equivalente al del clásico juego de descarte de colores.
+ * Mazo de Última Carta: las 108 cartas de juego de la edición Mattel 41001-0925.
+ * Las 4 cartas en blanco de la edición no se incluyen (ver docs/reglas/ultima-carta/EDICION.md).
  * JS puro.
- *
- * Por color (rojo, amarillo, verde, azul): un 0, dos de cada 1–9, dos Salto,
- * dos Reversa y dos Roba Dos. Además 4 Comodines y 4 Comodín Roba Cuatro.
  */
 export const COLORS = ['red', 'yellow', 'green', 'blue'];
 export const COLOR_NAMES = { red: 'rojo', yellow: 'amarillo', green: 'verde', blue: 'azul' };
@@ -18,12 +16,14 @@ export const KIND_NAMES = {
   wild4: 'Comodín Roba Cuatro',
 };
 
+export const DECK_SIZE = 108;
+
 export function buildDeck() {
   const cards = [];
   let n = 0;
   const add = (color, kind, value = null) => cards.push({ id: `k${n++}`, color, kind, value });
   for (const color of COLORS) {
-    add(color, 'number', 0);
+    add(color, 'number', 0); // un 0 por color
     for (let v = 1; v <= 9; v++) {
       add(color, 'number', v);
       add(color, 'number', v);
@@ -40,10 +40,12 @@ export function buildDeck() {
   return cards;
 }
 
-/** Puntos que vale una carta en la mano de un rival al terminar la ronda. */
+export const isWild = (card) => card.kind === 'wild' || card.kind === 'wild4';
+
+/** Puntos de la sección SCORING. */
 export function cardPoints(card) {
   if (card.kind === 'number') return card.value;
-  if (card.kind === 'wild' || card.kind === 'wild4') return 50;
+  if (isWild(card)) return 50;
   return 20;
 }
 

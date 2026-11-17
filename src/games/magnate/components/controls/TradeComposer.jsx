@@ -7,13 +7,15 @@ import { getGroup } from '../../data/groups.js';
 import { getCurrentPlayer, getPlayerSquares } from '../../state/selectors.js';
 import { ACTIONS, tradeBlocker } from '../../engine/index.js';
 import { formatMoney } from '../format.js';
+import { useSeat } from '../seat.js';
 
 const emptyOffer = () => ({ money: 0, squares: [], jailCards: 0 });
 
 /** Ventana para proponer un trato. G0009: cualquier jugador negocia con cualquiera en cualquier momento. */
 export default function TradeComposer({ state, send, onClose }) {
+  const { me: seatMe, online } = useSeat();
   const alive = state.players.filter((p) => p.status !== 'bankrupt');
-  const [fromId, setFromId] = useState(getCurrentPlayer(state).id);
+  const [fromId, setFromId] = useState(online ? seatMe : getCurrentPlayer(state).id);
   const me = alive.find((p) => p.id === fromId) ?? alive[0];
   const others = alive.filter((p) => p.id !== me.id);
   const [toId, setToId] = useState(others[0]?.id);
@@ -57,7 +59,7 @@ export default function TradeComposer({ state, send, onClose }) {
         </>
       }
     >
-      <div className="trade__targets">
+      <div className="trade__targets" hidden={online}>
         <span>Propone:</span>
         {alive.map((p) => (
           <button key={p.id} type="button" className={`trade__target ${p.id === me.id ? 'is-active' : ''}`} onClick={() => changeProposer(p.id)}>
