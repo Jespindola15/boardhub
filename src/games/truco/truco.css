@@ -52,3 +52,8 @@
 .tr-opts { display: flex; gap: 10px; flex-wrap: wrap; font-size: 12px; color: var(--text-2); }
 .tr-handover__pts { display: flex; gap: 22px; font-size: 18px; font-weight: 800; }
 .tr-handover__envido { color: var(--text-2); }
+/* Naipes ilustrados: más grandes para que se lean las figuras. */
+.tr-hand .sp-card { width: 104px; height: 160px; border-radius: 9px; }
+.tr-hand { min-height: 168px; }
+.tr-played .sp-card { width: 58px; height: 89px; border-radius: 6px; }
+.tr-played__card { margin-left: -20px; }

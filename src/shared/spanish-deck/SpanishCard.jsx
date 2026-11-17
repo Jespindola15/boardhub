@@ -43,9 +43,38 @@ const FACE = { 10: 'S', 11: 'C', 12: 'R' };
  * Carta de baraja española.
  * props: card, back, selected, dim, onClick, size ('sm'|'md'|'lg'), label (p. ej. identidad del comodín)
  */
-export default function SpanishCard({ card, back = false, selected = false, dim = false, onClick, size = 'md', label, className = '', style, draggable, onDragStart, onDragOver, onDrop, onDoubleClick }) {
+const SUIT_ROW = { oros: 0, copas: 1, espadas: 2, bastos: 3 };
+/** Posición de una carta en la lámina ilustrada (12 columnas × 5 filas; el dorso en la fila 5, columna 2). */
+const spritePos = (col, row) => `${(col / 11) * 100}% ${(row / 4) * 100}%`;
+
+/**
+ * skin: 'propia' (dibujo vectorial de BoardHub) | 'clasica' (ilustraciones de baraja española, public/naipes).
+ */
+export default function SpanishCard({ card, back = false, selected = false, dim = false, onClick, size = 'md', label, className = '', style, draggable, onDragStart, onDragOver, onDrop, onDoubleClick, skin = 'propia' }) {
+  const classic = skin === 'clasica' && !card?.joker;
   if (back || !card) {
+    if (skin === 'clasica') return <span className={`sp-card sp-card--classic sp-card--${size} ${className}`} style={{ ...style, backgroundPosition: spritePos(1, 4) }} aria-label="Carta boca abajo" />;
     return <span className={`sp-card sp-card--back sp-card--${size} ${className}`} style={style} />;
+  }
+  if (classic) {
+    const Tag = onClick ? 'button' : 'span';
+    const cls = ['sp-card', 'sp-card--classic', `sp-card--${size}`, selected ? 'is-selected' : '', dim ? 'is-dim' : '', onClick ? 'is-clickable' : '', className].filter(Boolean).join(' ');
+    const name = `${card.rank} de ${card.suit}`;
+    return (
+      <Tag
+        type={onClick ? 'button' : undefined}
+        className={cls}
+        style={{ ...style, backgroundPosition: spritePos(card.rank - 1, SUIT_ROW[card.suit]) }}
+        onClick={onClick}
+        onDoubleClick={onDoubleClick}
+        draggable={draggable}
+        onDragStart={onDragStart}
+        onDragOver={onDragOver}
+        onDrop={onDrop}
+        title={name}
+        aria-label={name}
+      />
+    );
   }
   const Tag = onClick ? 'button' : 'span';
   const cls = ['sp-card', `sp-card--${size}`, card.joker ? 'sp-card--joker' : `sp-card--${card.suit}`, selected ? 'is-selected' : '', dim ? 'is-dim' : '', onClick ? 'is-clickable' : '', className]

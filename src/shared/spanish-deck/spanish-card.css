@@ -36,3 +36,12 @@
 .sp-card.is-clickable:hover { transform: translateY(-10px); box-shadow: 0 12px 22px rgba(0, 0, 0, 0.5), inset 0 0 0 3px #fffdf7; }
 .sp-card.is-selected { transform: translateY(-16px); box-shadow: 0 0 0 3px #ffd36b, 0 14px 24px rgba(0, 0, 0, 0.5); }
 .sp-card.is-dim { filter: brightness(0.6); }
+
+/* Estilo clásico: ilustraciones de baraja española (lámina en public/naipes). */
+.sp-card--classic {
+  background: #fff url('/naipes/baraja-espanola.webp') no-repeat;
+  background-size: 1200% 500%;
+  border: 1px solid #b9b2a0;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
+  overflow: hidden;
+}

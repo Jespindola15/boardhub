@@ -80,7 +80,7 @@ export default function TrucoTable({ view, send, onNextRound, nextRoundLabel = '
                 {playing && p.id !== view.me && (
                   <div className="tr-seat__backs">
                     {Array.from({ length: h.remaining[p.id] }, (_, i) => (
-                      <SpanishCard key={i} back size="sm" />
+                      <SpanishCard key={i} back size="sm" skin="clasica" />
                     ))}
                   </div>
                 )}
@@ -92,7 +92,7 @@ export default function TrucoTable({ view, send, onNextRound, nextRoundLabel = '
             <div key={pid} className="tr-played" style={pos(pid, 0.5)}>
               {cards.map((x, b) =>
                 x ? (
-                  <SpanishCard key={x.card.id} card={x.card} size="sm" className={`tr-played__card ${x.winner ? 'is-winner' : ''} ${x.parda ? 'is-parda' : ''}`} style={{ '--b': b }} />
+                  <SpanishCard key={x.card.id} card={x.card} size="sm" skin="clasica" className={`tr-played__card ${x.winner ? 'is-winner' : ''} ${x.parda ? 'is-parda' : ''}`} style={{ '--b': b }} />
                 ) : null,
               )}
             </div>
@@ -117,6 +117,7 @@ export default function TrucoTable({ view, send, onNextRound, nextRoundLabel = '
               <SpanishCard
                 key={c.id}
                 card={c}
+                skin="clasica"
                 size="lg"
                 selected={selected === c.id}
                 onClick={canPlay ? () => (selected === c.id ? send('PLAY', { cardId: c.id }) : setSelected(c.id)) : undefined}
