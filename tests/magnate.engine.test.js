@@ -941,3 +941,29 @@ describe('J. Integridad', () => {
     assert.deepEqual(a.state, b.state);
   });
 });
+
+describe('Reglas de la casa', () => {
+  test('skipPurchase desactivada (oficial): no se puede pasar sin comprar ni subastar', () => {
+    let s = newGame(2);
+    s = act(s, ACTIONS.ROLL_DICE, 'p1', {}, dice(2, 3));
+    reject(s, ACTIONS.SKIP_PROPERTY, 'p1');
+  });
+
+  test('skipPurchase activada: se puede pasar y la propiedad sigue en la banca', () => {
+    let s = createGameState({ players: mkPlayers(2), rng: seeded(1), startingPlayerId: 'p1', options: { skipPurchase: true } });
+    s = act(s, ACTIONS.ROLL_DICE, 'p1', {}, dice(2, 3)); // Estación Norte
+    reject(s, ACTIONS.SKIP_PROPERTY, 'p2');
+    s = act(s, ACTIONS.SKIP_PROPERTY, 'p1');
+    assert.equal(s.ownership[5], undefined);
+    assert.equal(s.auction, null);
+    assert.equal(s.turn.step, 'end');
+    assert.equal(P(s, 'p1').money, 1500);
+  });
+
+  test('skipPurchase con dobles: después de pasar se vuelve a tirar', () => {
+    let s = createGameState({ players: mkPlayers(2), rng: seeded(1), startingPlayerId: 'p1', options: { skipPurchase: true } });
+    s = act(s, ACTIONS.ROLL_DICE, 'p1', {}, dice(3, 3)); // 6
+    s = act(s, ACTIONS.SKIP_PROPERTY, 'p1');
+    assert.equal(s.turn.step, 'roll');
+  });
+});

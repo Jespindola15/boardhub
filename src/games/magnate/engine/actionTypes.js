@@ -8,6 +8,7 @@ export const ACTIONS = {
   ROLL_DICE: 'ROLL_DICE',
   BUY_PROPERTY: 'BUY_PROPERTY',
   DECLINE_PROPERTY: 'DECLINE_PROPERTY', // abre subasta
+  SKIP_PROPERTY: 'SKIP_PROPERTY', // regla de la casa: no comprar ni subastar
   PLACE_BID: 'PLACE_BID',
   PASS_BID: 'PASS_BID',
   BUILD: 'BUILD',

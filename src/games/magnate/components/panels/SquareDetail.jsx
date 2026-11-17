@@ -135,6 +135,7 @@ function StationBody({ square }) {
       <dl className="deed__facts">
         <div><dt>Precio</dt><dd>{formatMoney(square.price)}</dd></div>
         <div><dt>Hipoteca</dt><dd>{formatMoney(square.mortgage)}</dd></div>
+        <div><dt>Levantarla</dt><dd>{formatMoney(square.unmortgage)}</dd></div>
       </dl>
     </>
   );
@@ -152,6 +153,7 @@ function UtilityBody({ square }) {
       <dl className="deed__facts">
         <div><dt>Precio</dt><dd>{formatMoney(square.price)}</dd></div>
         <div><dt>Hipoteca</dt><dd>{formatMoney(square.mortgage)}</dd></div>
+        <div><dt>Levantarla</dt><dd>{formatMoney(square.unmortgage)}</dd></div>
       </dl>
     </>
   );

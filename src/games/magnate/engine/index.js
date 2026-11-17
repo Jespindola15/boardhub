@@ -10,6 +10,7 @@
  * Tipos de acción:
  *  - De TURNO (sólo el jugador del turno y sin interrupciones pendientes):
  *      ROLL_DICE, PAY_JAIL_FINE, USE_JAIL_CARD, BUY_PROPERTY, DECLINE_PROPERTY, END_TURN
+ *      (+ SKIP_PROPERTY sólo con la regla de la casa `options.skipPurchase`)
  *  - LIBRES (cualquier jugador en juego, en cualquier momento — G0009 BUILDINGS y DEALS & TRADES):
  *      BUILD, SELL_BUILDING, MORTGAGE, UNMORTGAGE, PROPOSE_TRADE, RESPOND_TRADE, CANCEL_TRADE, RESIGN
  *  - De INTERRUPCIÓN (quien corresponda):
@@ -635,6 +636,16 @@ const HANDLERS = {
     s.pendingPurchase = null;
     s.turn.step = stepAfterResolution(s);
     startPropertyAuction(s, index);
+  },
+
+  /** Regla de la casa `skipPurchase`: pasar sin comprar ni subastar (no es oficial). */
+  [ACTIONS.SKIP_PROPERTY](s, p) {
+    requireTurnAction(s, p, TURN_STEPS.BUY);
+    check(s.options?.skipPurchase, 'El reglamento obliga a comprar o subastar la propiedad.');
+    const sq = BOARD[s.pendingPurchase];
+    s.pendingPurchase = null;
+    s.turn.step = stepAfterResolution(s);
+    log(s, `${p.name} no compra ${sq.name}: sigue siendo de la banca.`);
   },
 
   [ACTIONS.END_TURN](s, p) {

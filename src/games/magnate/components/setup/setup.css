@@ -76,3 +76,11 @@
 
 .setup__foot { display: flex; justify-content: space-between; gap: 12px; margin-top: 20px; }
 .setup__error { margin-top: 10px; color: var(--danger); font-size: 13px; text-align: right; }
+
+.setup__option {
+  display: flex; gap: 10px; align-items: flex-start; margin-top: 16px; padding: 10px 12px;
+  border: 1px dashed rgba(255, 181, 71, 0.35); border-radius: var(--radius-md); cursor: pointer; text-align: left;
+}
+.setup__option input { margin-top: 3px; accent-color: var(--brand); }
+.setup__option span { display: flex; flex-direction: column; gap: 3px; font-size: 14px; }
+.setup__option small { color: var(--text-3); font-size: 12px; line-height: 1.4; }

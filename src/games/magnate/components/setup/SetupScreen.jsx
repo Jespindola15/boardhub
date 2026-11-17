@@ -12,6 +12,7 @@ const makeSeat = (i) => ({ id: `p${i + 1}`, name: DEFAULT_NAMES[i], colorId: PLA
 /** Configuración de una partida local: 2–8 jugadores en la misma PC. */
 export default function SetupScreen({ onStart }) {
   const [seats, setSeats] = useState(() => [0, 1, 2, 3].map(makeSeat));
+  const [skipPurchase, setSkipPurchase] = useState(true);
 
   const update = (i, patch) => setSeats((s) => s.map((seat, j) => (j === i ? { ...seat, ...patch } : seat)));
 
@@ -99,11 +100,27 @@ export default function SetupScreen({ onStart }) {
           ))}
         </ol>
 
+        <label className="setup__option">
+          <input type="checkbox" checked={skipPurchase} onChange={(e) => setSkipPurchase(e.target.checked)} />
+          <span>
+            <strong>Permitir pasar sin comprar ni subastar</strong>
+            <small>
+              Regla de la casa. El reglamento oficial obliga a comprar o subastar; con esta opción también se puede
+              dejar la propiedad en la banca.
+            </small>
+          </span>
+        </label>
+
         <div className="setup__foot">
           <Button onClick={add} disabled={seats.length >= MAX_PLAYERS}>
             + Agregar jugador ({seats.length}/{MAX_PLAYERS})
           </Button>
-          <Button variant="primary" size="lg" disabled={!valid} onClick={() => onStart(seats.map((s) => ({ ...s, name: s.name.trim(), isHost: s === seats[0] })))}>
+          <Button variant="primary" size="lg" disabled={!valid} onClick={() =>
+              onStart({
+                players: seats.map((s) => ({ ...s, name: s.name.trim(), isHost: s === seats[0] })),
+                options: { skipPurchase },
+              })
+            }>
             Empezar partida
           </Button>
         </div>

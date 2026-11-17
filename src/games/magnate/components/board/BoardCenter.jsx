@@ -142,6 +142,11 @@ function BuyChoice({ state, send, player }) {
         Comprar
       </Button>
       <Button onClick={() => send(ACTIONS.DECLINE_PROPERTY)}>Subastar</Button>
+      {state.options?.skipPurchase && (
+        <Button variant="ghost" className="span-2" onClick={() => send(ACTIONS.SKIP_PROPERTY)}>
+          Pasar (dejarla en la banca)
+        </Button>
+      )}
     </>
   );
 }

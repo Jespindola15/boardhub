@@ -73,6 +73,7 @@ export default function RulesModal({ onClose }) {
             <li>El alquiler se cobra automáticamente.</li>
             <li>Abandonar la partida equivale a quebrar ante la banca.</li>
             <li>Se admiten hasta 8 jugadores (la caja indica 2–6).</li>
+            <li>Regla de la casa opcional: pasar sin comprar ni subastar una propiedad libre.</li>
           </ul>
         </section>
       </div>

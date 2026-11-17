@@ -102,3 +102,10 @@ Restricciones adicionales: un deudor no puede construir ni levantar hipotecas ha
 - La subasta "a viva voz" se juega con pujas y "no subo" explícitos (B4).
 - Abandonar = bancarrota ante la banca (decisión F7, política de plataforma).
 - Hasta 8 jugadores (A10).
+
+## 13. Reglas de la casa opcionales
+Se eligen al crear la partida (`options`). Desactivadas, el juego es el reglamento G0009.
+
+| Opción | Efecto | Estado por defecto en la configuración |
+|---|---|---|
+| `skipPurchase` | Quien cae en una propiedad libre puede **pasar** sin comprarla ni subastarla; la propiedad sigue en la banca (acción `SKIP_PROPERTY`). El reglamento oficial obliga a comprar o subastar. | Activada (pedida explícitamente) |

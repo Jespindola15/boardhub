@@ -69,7 +69,14 @@ export function rollForFirstPlayer(players, rng) {
  * Estado inicial de una partida. `rng` permite partidas reproducibles (tests, servidor).
  * `startingPlayerId` sólo se usa en pruebas para fijar quién empieza.
  */
-export function createGameState({ id = 'local', players, rng = Math.random, startingPlayerId }) {
+/**
+ * Opciones de partida. Todas desactivadas = reglamento oficial G0009.
+ *  - skipPurchase: REGLA DE LA CASA (pedida explícitamente). Quien cae en una propiedad libre
+ *    puede pasar sin comprarla ni subastarla; la propiedad sigue en la banca.
+ */
+export const DEFAULT_OPTIONS = { skipPurchase: false };
+
+export function createGameState({ id = 'local', players, rng = Math.random, startingPlayerId, options = {} }) {
   if (players.length < MIN_PLAYERS || players.length > MAX_PLAYERS) {
     throw new Error(`Magnate admite entre ${MIN_PLAYERS} y ${MAX_PLAYERS} jugadores`);
   }
@@ -93,6 +100,7 @@ export function createGameState({ id = 'local', players, rng = Math.random, star
     version: 0,
     phase: 'playing',
     winnerId: null,
+    options: { ...DEFAULT_OPTIONS, ...options },
     players: built,
     turn: { playerId: first.id, firstPlayerId: first.id, round: 1, step: TURN_STEPS.ROLL, doublesInRow: 0, extraRoll: false },
     dice: null,
