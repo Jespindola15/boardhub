@@ -70,6 +70,17 @@ export function startServer({ port = 3001, dataFile = join(ROOT, 'server', 'data
   }
 
   const http = createServer(async (req, res) => {
+    if (req.method === 'GET' && req.url.startsWith('/api/rooms')) {
+      const game = new URL(req.url, 'http://x').searchParams.get('game');
+      const list = [...rooms.values()]
+        .map((r) => r.listing())
+        .filter((l) => l && (!game || l.gameId === game))
+        .sort((a, b) => b.updatedAt - a.updatedAt)
+        .slice(0, 100);
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify({ ok: true, rooms: list }));
+      return;
+    }
     if (req.method === 'POST' && req.url === '/api/rooms') {
       const body = await readJson(req);
       res.setHeader('Content-Type', 'application/json');
@@ -77,7 +88,7 @@ export function startServer({ port = 3001, dataFile = join(ROOT, 'server', 'data
         let code;
         do code = newCode();
         while (rooms.has(code));
-        const { room, seat } = Room.create({ code, gameId: body.gameId, name: body.name, options: body.options }, { rng });
+        const { room, seat } = Room.create({ code, gameId: body.gameId, name: body.name, options: body.options, visibility: body.visibility }, { rng });
         rooms.set(code, room);
         persist();
         res.end(JSON.stringify({ ok: true, code, playerId: seat.playerId, token: seat.token }));

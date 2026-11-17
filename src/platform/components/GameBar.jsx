@@ -9,7 +9,7 @@ import './platform.css';
  * Barra superior común a todas las pantallas de juego.
  * `actions` se inserta antes de los botones estándar.
  */
-export default function GameBar({ title, accent = 'var(--brand-3)', inGame, onQuit, actions, badge = 'Partida local · misma PC', invite = true }) {
+export default function GameBar({ title, accent = 'var(--brand-3)', inGame, onQuit, actions, badge = 'Partida local · misma PC', onlineSlug }) {
   const [confirm, setConfirm] = useState(false);
   return (
     <header className="game-bar">
@@ -23,9 +23,9 @@ export default function GameBar({ title, accent = 'var(--brand-3)', inGame, onQu
       {badge && <Badge tone="ok">{badge}</Badge>}
       <div className="game-bar__actions">
         {actions}
-        {invite === true && (
-          <Button size="sm" variant="ghost" pending pendingNote="Este juego todavía no tiene modo online">
-            Invitar amigos
+        {onlineSlug && (
+          <Button size="sm" variant="ghost" onClick={() => navigate(`/salas?juego=${onlineSlug}`)} title="Crear o buscar una sala online de este juego">
+            Jugar online
           </Button>
         )}
         {inGame &&

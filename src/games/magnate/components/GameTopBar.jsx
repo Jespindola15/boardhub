@@ -21,8 +21,8 @@ export default function GameTopBar({ manifest, inGame, onQuit }) {
         <Button size="sm" variant="ghost" onClick={() => setRules(true)}>
           Reglamento
         </Button>
-        <Button size="sm" variant="ghost" pending pendingNote="Las salas online llegarán con el servidor">
-          Invitar amigos
+        <Button size="sm" variant="ghost" onClick={() => navigate('/salas?juego=magnate')} title="Crear o buscar una sala online de Magnate">
+          Jugar online
         </Button>
         {inGame &&
           (confirm ? (

@@ -50,7 +50,7 @@ export class Room {
     this.now = now;
   }
 
-  static create({ code, gameId, name, options }, env) {
+  static create({ code, gameId, name, options, visibility }, env) {
     const game = GAMES[gameId];
     if (!game) fail('Ese juego todavía no se puede jugar en línea.');
     const room = new Room(
@@ -59,6 +59,7 @@ export class Room {
         gameId,
         options: game.validateOptions ? game.validateOptions(options) : {},
         status: 'lobby',
+        visibility: visibility === 'public' ? 'public' : 'private',
         hostId: null,
         seats: [],
         state: null,
@@ -107,11 +108,30 @@ export class Room {
     this.touch();
   }
 
+  /** Pública: aparece en el listado de salas abiertas. Privada: sólo con código. */
+  setVisibility(playerId, visibility) {
+    const d = this.data;
+    if (d.hostId !== playerId) fail('Sólo el anfitrión cambia la visibilidad.');
+    d.visibility = visibility === 'public' ? 'public' : 'private';
+    this.touch();
+  }
+
+  /** Entrada para el listado de salas públicas, o null si no debe aparecer. */
+  listing() {
+    const d = this.data;
+    if (d.visibility !== 'public' || d.status !== 'lobby' || !d.seats.length) return null;
+    if (d.seats.length >= this.game.players.max) return null;
+    const host = d.seats.find((s) => s.playerId === d.hostId) ?? d.seats[0];
+    return { code: d.code, gameId: d.gameId, host: host.name, players: d.seats.length, min: this.game.players.min, max: this.game.players.max, updatedAt: d.updatedAt };
+  }
+
   start(playerId) {
     const d = this.data;
     if (d.hostId !== playerId) fail('Sólo el anfitrión puede empezar.');
     if (d.status !== 'lobby') fail('La partida ya empezó.');
     if (d.seats.length < this.game.players.min) fail(`Hacen falta al menos ${this.game.players.min} jugadores.`);
+    const countError = this.game.checkPlayers?.(d.seats.length, d.options);
+    if (countError) fail(countError);
     d.state = this.game.setup({
       id: d.code,
       players: d.seats.map((s) => ({ id: s.playerId, name: s.name, colorId: s.colorId })),
@@ -190,9 +210,11 @@ export class Room {
       code: d.code,
       gameId: d.gameId,
       status: d.status,
+      visibility: d.visibility ?? 'private',
       hostId: d.hostId,
       options: d.options,
       limits: this.game.players,
+      countError: this.game.checkPlayers?.(d.seats.length, d.options) ?? null,
       seats: d.seats.map((s) => ({ playerId: s.playerId, name: s.name, colorId: s.colorId, connected: online.has(s.playerId), left: left.has(s.playerId) })),
     };
   }

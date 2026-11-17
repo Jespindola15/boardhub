@@ -2,6 +2,7 @@ import { useState } from 'react';
 import Button from '../../../shared/Button.jsx';
 import ScoringOption from './ScoringOption.jsx';
 import { createRoom } from '../../../net/useRoom.js';
+import { VisibilityToggle } from '../../../platform/pages/RoomsPage.jsx';
 import { lastName } from '../../../net/session.js';
 import { navigate } from '../../../app/router.js';
 
@@ -9,13 +10,14 @@ import { navigate } from '../../../app/router.js';
 export default function OnlineStart({ onLocal }) {
   const [name, setName] = useState(lastName());
   const [scoring, setScoring] = useState('winner');
+  const [visibility, setVisibility] = useState('public');
   const [code, setCode] = useState('');
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
 
   const create = async () => {
     setBusy(true);
-    const r = await createRoom({ gameId: 'ultima-carta', name, options: { scoring } });
+    const r = await createRoom({ gameId: 'ultima-carta', name, options: { scoring }, visibility });
     setBusy(false);
     if (!r.ok) return setError(r.error);
     navigate(`/sala/${r.code}`);
@@ -28,11 +30,12 @@ export default function OnlineStart({ onLocal }) {
         <p>Juego de descarte por colores para 2 a 8 jugadores, con las reglas oficiales de la edición clásica.</p>
 
         <section className="cm-start__block">
-          <h3>Crear sala privada</h3>
+          <h3>Crear sala online</h3>
           <input className="cm-input" placeholder="Tu nombre" maxLength={16} value={name} onChange={(e) => setName(e.target.value)} />
+          <VisibilityToggle value={visibility} onChange={setVisibility} />
           <ScoringOption value={scoring} onChange={setScoring} />
           <Button variant="primary" size="lg" disabled={!name.trim() || busy} onClick={create}>
-            Crear sala
+            Crear sala {visibility === 'public' ? 'pública' : 'privada'}
           </Button>
         </section>
 
@@ -50,6 +53,9 @@ export default function OnlineStart({ onLocal }) {
               Entrar
             </Button>
           </div>
+          <Button variant="ghost" onClick={() => navigate('/salas?juego=ultima-carta')}>
+            Ver salas públicas abiertas →
+          </Button>
         </section>
 
         <Button variant="ghost" onClick={onLocal}>

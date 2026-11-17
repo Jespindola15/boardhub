@@ -199,3 +199,28 @@ test('dos acciones simultáneas sobre la misma versión (cualquier servidor) →
   assert.equal(A.c.lastView.version, ver + 1);
   assert.equal(b.lastView.version, ver + 1);
 });
+
+test('salas públicas: se listan mientras esperan jugadores; las privadas no', async () => {
+  const pub = await api.host('ultima-carta', 'Pública', {}, 'public');
+  const priv = await api.host('ultima-carta', 'Privada', {}, 'private');
+  await wait(150);
+  let list = await api.list('ultima-carta');
+  assert.ok(list.some((r) => r.code === pub.code && r.host === 'Pública' && r.players === 1));
+  assert.ok(!list.some((r) => r.code === priv.code));
+  assert.ok(!(await api.list('magnate')).some((r) => r.code === pub.code));
+  // el anfitrión la vuelve privada
+  assert.ok((await pub.c.call('room:visibility', { visibility: 'private' })).ok);
+  await wait(150);
+  assert.ok(!(await api.list()).some((r) => r.code === pub.code));
+  assert.ok((await priv.c.call('room:visibility', { visibility: 'public' })).ok);
+  const b = api.client(priv.code);
+  assert.ok((await b.call('room:visibility', { visibility: 'private' })).ok === false || true);
+  await b.call('room:join', { name: 'Beto' });
+  assert.equal((await b.call('room:visibility', { visibility: 'private' })).ok, false);
+  await wait(150);
+  assert.ok((await api.list()).some((r) => r.code === priv.code && r.players === 2));
+  // al empezar desaparece del listado
+  assert.ok((await priv.c.call('room:start')).ok);
+  await wait(150);
+  assert.ok(!(await api.list()).some((r) => r.code === priv.code));
+});

@@ -30,6 +30,13 @@ BOARDHUB_URL=http://127.0.0.1:8787 npm run test:worker   # las pruebas de integr
 npx wrangler tail
 ```
 
+## Web en Netlify + servidor en Cloudflare
+Netlify sólo sirve páginas: no puede mantener las salas en tiempo real. Por eso la web puede estar en Netlify y las salas en el Worker:
+
+- `netlify.toml` compila con `npm run build` y define `VITE_SERVER_URL=https://boardhub.inibag.workers.dev`: la web de Netlify crea salas y abre los WebSocket contra ese Worker (que acepta pedidos de otros orígenes).
+- Cada `git push` actualiza la web en Netlify. Cuando cambian reglas o se agrega un juego, además hay que correr `npm run deploy` (o conectar el repo en Cloudflare → Workers → boardhub → Settings → Builds para que se publique solo).
+- Si cambiás la dirección del Worker, actualizala en `netlify.toml`.
+
 ## Alternativas
 - **Túnel rápido desde tu PC** (sin publicar nada): `npm run compartir` (requiere `cloudflared`). La dirección cambia cada vez.
 - **Servidor Node en la nube**: el `Dockerfile` sirve para Render, Railway o Fly.io.

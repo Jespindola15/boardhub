@@ -1,0 +1,82 @@
+/* Piezas comunes de las mesas de BoardHub (juegos nuevos). */
+.kit { height: 100vh; min-height: 600px; display: flex; flex-direction: column; overflow: hidden; }
+.kit-local { flex: 1; min-height: 0; display: flex; flex-direction: column; position: relative; }
+.kit-setup { flex: 1; display: flex; justify-content: center; padding: 24px; overflow: auto; }
+.kit-setup > * { margin: auto 0; }
+.kit-card {
+  width: min(540px, 100%);
+  background: linear-gradient(180deg, rgba(29, 34, 69, 0.85), rgba(21, 25, 51, 0.85));
+  border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-2);
+  padding: 26px; display: flex; flex-direction: column; gap: 12px; text-align: center;
+  animation: fade-up 0.4s var(--ease) both;
+}
+.kit-card p { color: var(--text-2); font-size: 14px; line-height: 1.5; }
+.kit-logo { font-weight: 900; font-size: 34px; letter-spacing: 0.08em; color: var(--accent); text-shadow: 0 0 28px color-mix(in srgb, var(--accent) 40%, transparent); }
+.kit-block { display: flex; flex-direction: column; gap: 10px; padding: 14px; border-radius: 14px; background: var(--surface); border: 1px solid var(--border); text-align: left; }
+.kit-block h3 { font-size: 15px; }
+.kit-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.kit-input { background: var(--bg-1); border: 1px solid var(--border); border-radius: 10px; color: var(--text-1); font: inherit; font-size: 15px; padding: 10px 12px; width: 100%; }
+.kit-input:focus { outline: 2px solid var(--brand); }
+.kit-input--code { letter-spacing: 0.25em; font-weight: 800; text-align: center; }
+.kit-error { color: var(--danger) !important; font-size: 13px; }
+.kit-names { list-style: none; padding: 0; margin: 4px 0; display: flex; flex-direction: column; gap: 6px; max-height: 40vh; overflow-y: auto; }
+.kit-names li { display: grid; grid-template-columns: 32px 1fr 30px; gap: 10px; align-items: center; }
+.kit-names input { background: var(--bg-1); border: 1px solid var(--border); border-radius: 8px; color: var(--text-1); font: inherit; font-size: 15px; padding: 8px 10px; }
+.kit-names button { background: none; border: 0; color: var(--text-3); cursor: pointer; }
+.kit-names button:disabled { opacity: 0.3; }
+
+.kit-avatar {
+  width: 30px; height: 30px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
+  color: #0b0d1a; font-weight: 900; font-size: 14px; flex: none; box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.35);
+}
+.kit-avatar--sm { width: 22px; height: 22px; font-size: 11px; }
+.kit-avatar--lg { width: 58px; height: 58px; font-size: 26px; }
+
+.kit-curtain {
+  position: absolute; inset: 0; z-index: 40; display: flex; align-items: center; justify-content: center;
+  background: rgba(6, 8, 18, 0.82); backdrop-filter: blur(14px);
+}
+.kit-curtain__box { display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; animation: fade-up .35s var(--ease) both; }
+.kit-curtain__box p { color: var(--text-2); }
+
+.kit-overlay { position: absolute; inset: 0; z-index: 30; display: flex; align-items: center; justify-content: center; background: rgba(6, 8, 18, 0.6); backdrop-filter: blur(4px); }
+.kit-overlay__box {
+  display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; max-width: min(860px, 94vw); max-height: 88vh; overflow: auto;
+  background: var(--bg-2); border: 1px solid var(--border-strong); border-radius: 18px; padding: 24px 28px; box-shadow: var(--shadow-2);
+  animation: fade-up .35s var(--ease) both;
+}
+.kit-trophy { font-size: 46px; animation: pop .6s var(--ease) both; }
+@keyframes pop { from { transform: scale(.3) rotate(-20deg); opacity: 0; } }
+
+.kit-panel { background: rgba(0, 0, 0, 0.22); border: 1px solid var(--border); border-radius: 14px; padding: 10px 12px; min-height: 0; }
+.kit-panel h4 { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--text-3); margin-bottom: 6px; }
+.kit-log { display: flex; flex-direction: column; overflow: hidden; }
+.kit-log ol { list-style: none; margin: 0; padding: 0; overflow-y: auto; font-size: 12.5px; color: var(--text-2); display: flex; flex-direction: column; gap: 4px; }
+.kit-log li:first-child { color: var(--text-1); }
+
+.kit-turn { text-align: center; font-size: 14px; color: var(--text-2); min-height: 22px; }
+.kit-turn.is-mine { color: #fff; font-weight: 700; text-shadow: 0 0 14px rgba(255,255,255,.35); animation: glow 1.6s ease-in-out infinite; }
+@keyframes glow { 50% { opacity: .75; } }
+
+.kit-rules { display: flex; flex-direction: column; gap: 14px; font-size: 14px; line-height: 1.55; color: var(--text-2); }
+.kit-rules h4 { color: var(--text-1); font-size: 15px; margin-bottom: 4px; }
+.kit-rules p + p { margin-top: 6px; }
+.kit-rules__source { font-size: 12px; color: var(--text-3); }
+
+.kit-options { display: flex; flex-direction: column; gap: 8px; text-align: left; width: 100%; }
+.kit-options label { display: flex; align-items: center; gap: 10px; font-size: 13.5px; color: var(--text-2); }
+.kit-options select { background: var(--bg-1); color: var(--text-1); border: 1px solid var(--border); border-radius: 8px; padding: 6px 8px; font: inherit; }
+.kit-options fieldset { border: 0; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px; }
+.kit-options fieldset:disabled { opacity: .75; }
+.kit-options small { color: var(--text-3); }
+
+/* Paño verde para juegos de naipes */
+.felt {
+  position: relative; border-radius: 22px;
+  background: radial-gradient(ellipse at 50% 45%, rgba(34, 197, 94, 0.18), transparent 60%), radial-gradient(ellipse at 50% 45%, #1b4a33, #0d2219 78%);
+  border: 1px solid rgba(255, 255, 255, 0.08); box-shadow: inset 0 0 80px rgba(0, 0, 0, 0.5), var(--shadow-2);
+}
+/* Los paneles laterales no se encogen (si no, se pisan); el registro ocupa lo que sobre. */
+.kit-panel { flex-shrink: 0; }
+.kit-log { flex-shrink: 1; min-height: 120px; }
+fieldset.kit-options { border: 0; padding: 0; margin: 0; }

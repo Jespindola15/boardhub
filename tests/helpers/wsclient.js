@@ -33,18 +33,22 @@ export function makeClient(base) {
     all.push(c);
     return c;
   }
-  async function create(gameId, name, options = {}) {
-    const res = await fetch(`${base}/api/rooms`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ gameId, name, options }) });
+  async function create(gameId, name, options = {}, visibility) {
+    const res = await fetch(`${base}/api/rooms`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ gameId, name, options, visibility }) });
     return res.json();
   }
+  async function list(game) {
+    const res = await fetch(`${base}/api/rooms${game ? `?game=${game}` : ''}`);
+    return (await res.json()).rooms;
+  }
   /** Crea la sala y conecta al creador con su sesión. */
-  async function host(gameId, name, options) {
-    const r = await create(gameId, name, options);
+  async function host(gameId, name, options, visibility) {
+    const r = await create(gameId, name, options, visibility);
     const c = client(r.code);
     const resumed = await c.call('room:resume', { token: r.token });
     return { ...r, c, resumed };
   }
   const closeAll = () => all.forEach((c) => c.close());
-  return { client, create, host, closeAll };
+  return { client, create, host, list, closeAll };
 }
 export const wait = (ms = 60) => new Promise((r) => setTimeout(r, ms));

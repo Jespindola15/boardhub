@@ -6,7 +6,14 @@
  * - Reconexión automática con espera creciente.
  * - Latido cada 15 s: si el servidor no responde, se fuerza la reconexión.
  */
-const wsUrl = (code) => `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws/${code}`;
+/**
+ * Servidor de tiempo real. Si la web está alojada en otro sitio (p. ej. Netlify), se
+ * define VITE_SERVER_URL con la dirección del Worker de Cloudflare al compilar.
+ * Vacío = el mismo origen que la página (Worker con la web incluida, o servidor Node).
+ */
+const SERVER = (import.meta.env?.VITE_SERVER_URL || '').replace(/\/+$/, '');
+const httpBase = () => SERVER || location.origin;
+const wsUrl = (code) => `${httpBase().replace(/^http/, 'ws')}/ws/${code}`;
 
 export function connectRoom(code, { onEvent, onStatus }) {
   let ws = null;
@@ -92,15 +99,26 @@ export function connectRoom(code, { onEvent, onStatus }) {
 }
 
 /** Crea una sala nueva (HTTP). */
-export async function createRoomRequest({ gameId, name, options }) {
+export async function createRoomRequest({ gameId, name, options, visibility }) {
   try {
-    const res = await fetch('/api/rooms', {
+    const res = await fetch(`${httpBase()}/api/rooms`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ gameId, name, options }),
+      body: JSON.stringify({ gameId, name, options, visibility }),
     });
     return await res.json();
   } catch {
     return { ok: false, error: 'No se pudo contactar al servidor.' };
+  }
+}
+
+/** Salas públicas abiertas (en espera y con lugar). */
+export async function listPublicRooms(game) {
+  try {
+    const res = await fetch(`${httpBase()}/api/rooms${game ? `?game=${encodeURIComponent(game)}` : ''}`, { cache: 'no-store' });
+    const r = await res.json();
+    return r.ok ? r.rooms : [];
+  } catch {
+    return null;
   }
 }

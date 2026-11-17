@@ -18,6 +18,12 @@ export default function GameArt({ art }) {
       return <MisterioArt />;
     case 'rutas':
       return <RutasArt />;
+    case 'chinchon':
+      return <NaipesArt felt="#1b4a33" cards={[['7', '#a3242b'], ['8', '#a3242b'], ['9', '#a3242b'], ['★', '#6b3fc4']]} />;
+    case 'truco':
+      return <NaipesArt felt="#2f2414" cards={[['1', '#1f4597'], ['1', '#1f6b35'], ['7', '#1f4597']]} matches />;
+    case 'mazmorras':
+      return <MazmorrasArt />;
     default:
       return null;
   }
@@ -177,6 +183,69 @@ function RutasArt() {
       {cities.map(([x, y]) => (
         <circle key={`${x}${y}`} cx={x} cy={y} r="8" fill="#f8fafc" stroke="#0f2a3a" strokeWidth="3" />
       ))}
+    </svg>
+  );
+}
+
+function NaipesArt({ felt, cards, matches }) {
+  return (
+    <svg viewBox="0 0 320 180" className="game-art" aria-hidden="true">
+      <defs>
+        <radialGradient id={`felt-${felt.slice(1)}`} cx="50%" cy="50%" r="70%">
+          <stop offset="0" stopColor={felt} />
+          <stop offset="1" stopColor="#081510" />
+        </radialGradient>
+      </defs>
+      <rect width="320" height="180" fill={`url(#felt-${felt.slice(1)})`} />
+      {cards.map(([t, c], i) => {
+        const n = cards.length;
+        const a = (i - (n - 1) / 2) * 14;
+        return (
+          <g key={i} transform={`translate(160 150) rotate(${a}) translate(-30 -128)`}>
+            <rect width="60" height="90" rx="7" fill="#fbf6ea" stroke="#d8cdb1" strokeWidth="2" />
+            <text x="30" y="58" textAnchor="middle" fontSize="34" fontWeight="900" fill={c}>
+              {t}
+            </text>
+          </g>
+        );
+      })}
+      {matches &&
+        [0, 1, 2, 3, 4].map((i) => (
+          <g key={i} transform={`translate(${30 + i * 9} ${40 + (i % 2) * 4})`}>
+            <rect width="4" height="56" rx="2" fill="#e8d3a2" />
+            <circle cx="2" cy="2" r="3.4" fill="#d9452b" />
+          </g>
+        ))}
+    </svg>
+  );
+}
+
+function MazmorrasArt() {
+  return (
+    <svg viewBox="0 0 320 180" className="game-art" aria-hidden="true">
+      <rect width="320" height="180" fill="#1a1024" />
+      <path d="M0 180 V70 Q160 -10 320 70 V180 Z" fill="#2d1b3d" />
+      <path d="M110 180 V96 Q160 46 210 96 V180 Z" fill="#0b0710" />
+      {[[60, 60], [262, 60]].map(([x, y]) => (
+        <g key={x}>
+          <rect x={x - 3} y={y} width="6" height="26" fill="#5a3a22" />
+          <path d={`M${x} ${y - 18} Q${x + 9} ${y - 6} ${x} ${y} Q${x - 9} ${y - 6} ${x} ${y - 18}`} fill="#ffb547" />
+        </g>
+      ))}
+      <g transform="translate(160 128)">
+        <ellipse cx="0" cy="34" rx="44" ry="7" fill="#000" opacity=".5" />
+        <path d="M-26 30 Q-30 -6 0 -14 Q30 -6 26 30 Z" fill="#6bd06b" />
+        <circle cx="-9" cy="2" r="5" fill="#fff" />
+        <circle cx="9" cy="2" r="5" fill="#fff" />
+        <circle cx="-9" cy="3" r="2.4" fill="#111" />
+        <circle cx="9" cy="3" r="2.4" fill="#111" />
+        <path d="M-10 16 Q0 22 10 16" stroke="#123" strokeWidth="2.4" fill="none" />
+      </g>
+      <g transform="translate(232 120) rotate(30)">
+        <rect x="-3" y="-44" width="6" height="56" fill="#cfd8e8" />
+        <rect x="-12" y="10" width="24" height="5" fill="#ffb547" />
+        <rect x="-2.5" y="15" width="5" height="14" fill="#5a3a22" />
+      </g>
     </svg>
   );
 }

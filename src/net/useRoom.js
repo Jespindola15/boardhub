@@ -116,8 +116,8 @@ export default function useRoom(code) {
 }
 
 /** Crear sala nueva (desde el catálogo o la página de salas). */
-export async function createRoom({ gameId, name, options }) {
-  const r = await createRoomRequest({ gameId, name, options });
+export async function createRoom({ gameId, name, options, visibility }) {
+  const r = await createRoomRequest({ gameId, name, options, visibility });
   if (r.ok) {
     rememberName(name);
     saveSession(r.code, { token: r.token, playerId: r.playerId });

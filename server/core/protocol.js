@@ -6,9 +6,10 @@
  *                      { ev, data }           evento: 'room:update' | 'game:view' | 'room:removed'
  *
  * Una conexión WebSocket pertenece a UNA sala (URL /ws/CODIGO).
- * Peticiones: room:join {name} · room:resume {token} · room:options {options} · room:start
+ * Peticiones: room:join {name} · room:resume {token} · room:options {options} · room:visibility {visibility} · room:start
  *             room:leave · room:remove {playerId} · game:action {...} · sync · ping
- * La creación de salas es por HTTP: POST /api/rooms {gameId, name, options}.
+ * La creación de salas es por HTTP: POST /api/rooms {gameId, name, options, visibility}.
+ * Salas públicas abiertas: GET /api/rooms[?game=slug].
  */
 import { RoomError } from './room.js';
 
@@ -45,6 +46,9 @@ export function handleRequest(room, conn, ev, payload = {}, { rateLimit = RATE_L
       }
       case 'room:options':
         room.setOptions(me(), payload.options);
+        return { reply: { ok: true }, changed: true };
+      case 'room:visibility':
+        room.setVisibility(me(), payload.visibility);
         return { reply: { ok: true }, changed: true };
       case 'room:start':
         room.start(me());

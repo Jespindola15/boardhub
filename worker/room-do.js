@@ -34,20 +34,38 @@ export class RoomDO extends DurableObject {
   }
 
   async save() {
+    const code = this.room.data.code;
     if (this.room.empty) {
       await this.ctx.storage.deleteAll();
       this.room = null;
+      await this.publish(code, null);
       return;
     }
     await this.ctx.storage.put('room', this.room.data);
     await this.ctx.storage.setAlarm(Date.now() + ROOM_TTL_MS);
+    await this.publish(code, this.room.listing());
+  }
+
+  /** Mantiene al día el listado de salas públicas (sólo si cambió). */
+  async publish(code, listing) {
+    if (!this.env.LOBBY) return;
+    const key = listing ? JSON.stringify({ ...listing, updatedAt: 0 }) : null;
+    if (key === this.lastListing) return;
+    this.lastListing = key;
+    try {
+      const lobby = this.env.LOBBY.get(this.env.LOBBY.idFromName('main'));
+      await (listing ? lobby.upsert(listing) : lobby.remove(code));
+    } catch (e) {
+      this.lastListing = undefined;
+      console.error('lobby', e);
+    }
   }
 
   /** RPC desde el Worker: crear la sala con este código. */
-  async create({ code, gameId, name, options }) {
+  async create({ code, gameId, name, options, visibility }) {
     if (await this.load()) return { exists: true };
     try {
-      const { room, seat } = Room.create({ code, gameId, name, options });
+      const { room, seat } = Room.create({ code, gameId, name, options, visibility });
       this.room = room;
       await this.save();
       return { ok: true, code, playerId: seat.playerId, token: seat.token };
@@ -135,8 +153,10 @@ export class RoomDO extends DurableObject {
     const room = await this.load();
     if (!room) return;
     if (Date.now() - room.data.updatedAt >= ROOM_TTL_MS && this.conns().length === 0) {
+      const code = room.data.code;
       await this.ctx.storage.deleteAll();
       this.room = null;
+      await this.publish(code, null);
     } else {
       await this.ctx.storage.setAlarm(Date.now() + ROOM_TTL_MS);
     }

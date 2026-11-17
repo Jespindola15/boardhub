@@ -1,0 +1,48 @@
+.ms-layout { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) clamp(290px, 22vw, 360px); gap: 14px; padding: 12px 14px 14px; }
+.ms-main { position: relative; min-height: 0; display: grid; grid-template-rows: 1fr auto auto; gap: 8px; }
+.ms-board { position: relative; min-height: 0; display: flex; justify-content: center; }
+.ms-svg { height: 100%; max-width: 100%; display: block; border-radius: 14px; box-shadow: var(--shadow-2); }
+.ms-cell { fill: #d9c49a; stroke: #b39b6b; stroke-width: .6; }
+.ms-cell.is-target { fill: #ffe08a; cursor: pointer; animation: ms-pulse 1.2s ease-in-out infinite; }
+.ms-cell.is-target:hover { fill: #ffd36b; }
+@keyframes ms-pulse { 50% { fill: #f4cf72; } }
+.ms-room rect:first-child { stroke: #e8c27a; stroke-width: 2; }
+.ms-room.is-target { cursor: pointer; }
+.ms-room.is-target rect:first-child { stroke: #ffd36b; stroke-width: 5; filter: brightness(1.25); }
+.ms-room.is-mine rect:first-child { stroke: #fff; stroke-width: 3; }
+.ms-room__name { fill: #f3e6c8; font-size: 14px; font-weight: 800; text-anchor: middle; letter-spacing: .04em; pointer-events: none; }
+.ms-passage { fill: #e8c27a; font-size: 18px; text-anchor: middle; }
+.ms-weapon { font-size: 18px; pointer-events: none; }
+.ms-token { filter: drop-shadow(0 2px 2px rgba(0,0,0,.6)); transition: cx .3s, cy .3s; }
+.ms-center { font-size: 34px; text-anchor: middle; }
+.ms-center__t { fill: #e8c27a; font-size: 12px; font-weight: 800; letter-spacing: .2em; text-anchor: middle; }
+.ms-dice { position: absolute; top: 10px; right: 10px; display: flex; gap: 6px; }
+.ms-dice i { width: 36px; height: 36px; border-radius: 9px; background: #fff; color: #111; display: flex; align-items: center; justify-content: center; font-style: normal; font-weight: 900; font-size: 19px; animation: ms-roll .5s var(--ease) both; }
+@keyframes ms-roll { from { transform: rotate(-200deg) scale(.4); opacity: 0; } }
+.ms-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+.ms-side { display: flex; flex-direction: column; gap: 10px; min-height: 0; overflow: auto; }
+.ms-side .kit-log { min-height: 140px; }
+.ms-player { display: flex; align-items: center; gap: 10px; padding: 5px 6px; border-radius: 8px; font-size: 13px; }
+.ms-player span:last-child { display: flex; flex-direction: column; }
+.ms-player small { color: var(--text-2); font-size: 11.5px; }
+.ms-player.is-turn { background: rgba(255,255,255,.06); }
+.ms-player.is-out { opacity: .5; }
+.ms-dot { width: 14px; height: 14px; border-radius: 50%; border: 2px solid #111; flex: none; }
+.ms-last p { font-size: 13px; color: var(--text-2); margin-top: 3px; }
+.ms-cards div { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.ms-card { font-size: 12px; padding: 5px 9px; border-radius: 8px; background: #f1ead8; color: #3c2412; font-weight: 600; }
+.ms-card--weapon { background: #dfe7f5; }
+.ms-card--room { background: #e3f0dc; }
+.ms-notes__group { margin-bottom: 8px; }
+.ms-notes__group h5 { font-size: 12px; color: var(--text-2); margin: 4px 0; }
+.ms-notes h4 { text-transform: none; letter-spacing: 0; font-size: 11.5px; }
+.ms-note { display: flex; width: 100%; justify-content: space-between; padding: 3px 8px; border: 0; border-radius: 6px; background: transparent; color: var(--text-1); font: inherit; font-size: 12.5px; cursor: pointer; }
+.ms-note:hover { background: rgba(255,255,255,.06); }
+.ms-note.is-known span, .ms-note.is-x span { text-decoration: line-through; color: var(--text-3); }
+.ms-note.is-v { color: #7ff0b0; font-weight: 700; }
+.ms-note.is-q b { color: var(--warn); }
+.ms-show { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+.ms-case { display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px; }
+.ms-case label { display: flex; justify-content: space-between; align-items: center; color: var(--text-2); }
+.ms-case select { background: var(--bg-1); color: var(--text-1); border: 1px solid var(--border); border-radius: 8px; padding: 7px 9px; font: inherit; min-width: 260px; }
+.ms-solution { font-size: 16px; }

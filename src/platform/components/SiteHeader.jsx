@@ -1,8 +1,9 @@
 import Logo from './Logo.jsx';
 import Button from '../../shared/Button.jsx';
+import { navigate } from '../../app/router.js';
 import './platform.css';
 
-export default function SiteHeader() {
+export default function SiteHeader({ active = 'inicio' }) {
   return (
     <header className="site-header">
       <div className="site-header__inner">
@@ -10,13 +11,19 @@ export default function SiteHeader() {
           <Logo />
         </a>
         <nav className="site-nav" aria-label="Principal">
-          <a href="#/" className="site-nav__link is-active">Inicio</a>
-          <a href="#catalogo" className="site-nav__link" onClick={scrollToCatalog}>Juegos</a>
-          <a href="#/salas" className="site-nav__link">Salas</a>
+          <a href="#/" className={`site-nav__link ${active === 'inicio' ? 'is-active' : ''}`}>
+            Inicio
+          </a>
+          <a href="#/" className="site-nav__link" onClick={goToCatalog}>
+            Juegos
+          </a>
+          <a href="#/salas" className={`site-nav__link ${active === 'salas' ? 'is-active' : ''}`}>
+            Salas
+          </a>
         </nav>
         <div className="site-header__actions">
-          <Button variant="ghost" size="sm" pending pendingNote="El sistema de cuentas llegará más adelante">
-            Iniciar sesión
+          <Button variant="primary" size="sm" onClick={() => navigate('/salas')}>
+            Crear o unirse a una sala
           </Button>
         </div>
       </div>
@@ -24,7 +31,12 @@ export default function SiteHeader() {
   );
 }
 
-function scrollToCatalog(e) {
+function goToCatalog(e) {
   e.preventDefault();
-  document.getElementById('catalogo')?.scrollIntoView({ behavior: 'smooth' });
+  const el = document.getElementById('catalogo');
+  if (el) el.scrollIntoView({ behavior: 'smooth' });
+  else {
+    navigate('/');
+    setTimeout(() => document.getElementById('catalogo')?.scrollIntoView({ behavior: 'smooth' }), 80);
+  }
 }

@@ -7,6 +7,7 @@ import Button from '../../shared/Button.jsx';
 import Badge from '../../shared/Badge.jsx';
 import { paletteHex } from '../../shared/playerPalette.js';
 import { navigate } from '../../app/router.js';
+import { VisibilityToggle } from './RoomsPage.jsx';
 import '../components/platform.css';
 
 const cache = new Map();
@@ -40,7 +41,6 @@ export default function RoomPage({ code }) {
       title={game?.name ?? 'Sala'}
       accent={game?.accent}
       badge={`Sala ${code}${r.connected ? '' : ' · reconectando…'}`}
-      invite={false}
       actions={
         <>
           {mod && (
@@ -130,7 +130,7 @@ function Lobby({ room, me, call, mod }) {
       /* el usuario puede copiar el código a mano */
     }
   };
-  const enough = room.seats.length >= room.limits.min;
+  const enough = room.seats.length >= room.limits.min && !room.countError;
 
   return (
     <div className="state-page">
@@ -140,6 +140,10 @@ function Lobby({ room, me, call, mod }) {
         <Button size="sm" onClick={copy}>
           {copied ? '¡Enlace copiado!' : 'Copiar enlace de invitación'}
         </Button>
+        <div className="room-vis">
+          Visibilidad de la sala
+          <VisibilityToggle value={room.visibility ?? 'private'} disabled={!isHost} onChange={(visibility) => call('room:visibility', { visibility })} />
+        </div>
         <h3>
           Jugadores {room.seats.length}/{room.limits.max}
         </h3>
@@ -170,7 +174,7 @@ function Lobby({ room, me, call, mod }) {
         )}
         {isHost ? (
           <Button variant="primary" size="lg" disabled={!enough} onClick={() => call('room:start')}>
-            {enough ? 'Empezar partida' : `Hacen falta ${room.limits.min} jugadores`}
+            {enough ? 'Empezar partida' : room.countError ?? `Hacen falta ${room.limits.min} jugadores`}
           </Button>
         ) : (
           <p className="rooms__note">Esperando a que el anfitrión empiece la partida…</p>

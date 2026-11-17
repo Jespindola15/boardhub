@@ -16,6 +16,7 @@ export default function GameCard({ game, featured = false }) {
         <GameArt art={game.art} />
         <div className="game-card__badges">
           {available ? <Badge tone="ok">Disponible</Badge> : <Badge tone="pending">Próximamente</Badge>}
+          {game.online && <Badge tone="brand">Online</Badge>}
         </div>
       </div>
       <div className="game-card__body">
@@ -32,9 +33,16 @@ export default function GameCard({ game, featured = false }) {
         <p className="game-card__desc">{featured ? game.description : game.tagline}</p>
         <div className="game-card__actions">
           {available ? (
-            <Button variant="primary" onClick={() => navigate(`/juegos/${game.slug}`)}>
-              Abrir mesa
-            </Button>
+            <>
+              <Button variant="primary" onClick={() => navigate(`/juegos/${game.slug}`)}>
+                Jugar
+              </Button>
+              {game.online && (
+                <Button variant="ghost" onClick={() => navigate(`/salas?juego=${game.slug}`)}>
+                  Salas online
+                </Button>
+              )}
+            </>
           ) : (
             <Button pending pendingNote="Este juego todavía no está disponible">
               Jugar

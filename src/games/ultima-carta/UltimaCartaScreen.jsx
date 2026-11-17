@@ -28,7 +28,7 @@ export default function UltimaCartaScreen({ manifest }) {
         title={manifest?.name ?? 'Última Carta'}
         accent="#ef4444"
         badge={mode === "local" ? "Partida local · misma PC" : null}
-        invite={false}
+        onlineSlug="ultima-carta"
         inGame={mode === 'local' && Boolean(local.state)}
         onQuit={() => {
           local.quit();
