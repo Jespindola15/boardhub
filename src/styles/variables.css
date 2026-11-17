@@ -1,0 +1,44 @@
+/* Tokens de diseño globales de BoardHub. Todo color/espaciado de la plataforma sale de aquí. */
+:root {
+  /* Fondos */
+  --bg-0: #080a14;
+  --bg-1: #0e1122;
+  --bg-2: #151933;
+  --bg-3: #1d2245;
+  --surface: rgba(255, 255, 255, 0.04);
+  --surface-strong: rgba(255, 255, 255, 0.07);
+  --border: rgba(255, 255, 255, 0.09);
+  --border-strong: rgba(255, 255, 255, 0.18);
+
+  /* Texto */
+  --text-1: #f3f4fb;
+  --text-2: #aab0cf;
+  --text-3: #6f7598;
+
+  /* Marca */
+  --brand: #7c5cff;
+  --brand-2: #2ee6c5;
+  --brand-3: #ffb547;
+  --brand-4: #ff5c8a;
+  --brand-gradient: linear-gradient(135deg, #7c5cff 0%, #4f8bff 50%, #2ee6c5 100%);
+
+  /* Estados */
+  --ok: #3ddc84;
+  --warn: #ffb547;
+  --danger: #ff5470;
+  --pending: #8a8fb3;
+
+  /* Tipografía */
+  --font-ui: 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif;
+  --font-display: 'Segoe UI Semibold', 'Segoe UI', system-ui, -apple-system, sans-serif;
+
+  /* Geometría */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --shadow-1: 0 4px 14px rgba(0, 0, 0, 0.35);
+  --shadow-2: 0 18px 50px rgba(0, 0, 0, 0.55);
+
+  --ease: cubic-bezier(0.22, 0.8, 0.26, 1);
+  --header-h: 56px;
+}

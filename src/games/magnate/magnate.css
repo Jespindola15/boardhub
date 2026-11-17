@@ -1,0 +1,247 @@
+/* =====================================================================
+   Pantalla de Magnate: layout de tres columnas a pantalla completa.
+   [detalle + pruebas] [tablero] [jugadores + registro]
+   ===================================================================== */
+.magnate {
+  height: 100vh;
+  min-height: 600px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.magnate__layout {
+  --side-w: clamp(250px, 17vw, 340px);
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: var(--side-w) minmax(0, 1fr) var(--side-w);
+  gap: 14px;
+  padding: 12px 14px 14px;
+}
+.magnate__left,
+.magnate__right {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+}
+.magnate__board { min-width: 0; min-height: 0; }
+
+/* ---------------- Barra superior ---------------- */
+.game-topbar {
+  flex: none;
+  height: 50px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(8, 10, 20, 0.7);
+  backdrop-filter: blur(12px);
+}
+.game-topbar__home { display: flex; opacity: 0.9; transition: opacity 0.2s; }
+.game-topbar__home:hover { opacity: 1; }
+.game-topbar__home .bh-logo__text { font-size: 16px; }
+.game-topbar__sep { width: 1px; height: 22px; background: var(--border-strong); }
+.game-topbar__title {
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--brand-3);
+  margin-right: 4px;
+}
+.game-topbar__actions { margin-left: auto; display: flex; gap: 6px; align-items: center; }
+
+/* ---------------- Jugadores ---------------- */
+.players-panel { flex: 1 1 auto; min-height: 0; }
+.players__count { font-size: 12px; color: var(--text-3); font-weight: 600; }
+.players__list {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.pcard {
+  --pcolor: #8b6cff;
+  position: relative;
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  padding: 8px 10px 8px 12px;
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  transition: background 0.2s, border-color 0.2s, transform 0.2s var(--ease);
+  animation: fade-up 0.35s var(--ease) both;
+  overflow: hidden;
+}
+.pcard:hover { background: var(--surface-strong); }
+.pcard.is-highlighted { border-color: color-mix(in srgb, var(--pcolor) 60%, transparent); }
+.pcard__turn {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--pcolor);
+  opacity: 0.55;
+}
+.pcard.is-turn {
+  background: linear-gradient(90deg, color-mix(in srgb, var(--pcolor) 20%, transparent), rgba(255, 255, 255, 0.03));
+  border-color: color-mix(in srgb, var(--pcolor) 55%, transparent);
+  box-shadow: 0 0 24px -8px var(--pcolor);
+}
+.pcard.is-turn .pcard__turn { opacity: 1; width: 4px; }
+.pcard.is-bankrupt { opacity: 0.5; }
+.pcard.is-bankrupt .pcard__name { text-decoration: line-through; }
+
+.pcard__token { width: 34px; }
+.pcard__main { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.pcard__row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.pcard__name { font-weight: 700; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pcard__host { color: var(--brand-3); margin-left: 5px; font-size: 11px; }
+.pcard__money { font-weight: 800; font-size: 15px; font-variant-numeric: tabular-nums; color: #b5f5cf; }
+.pcard__money.is-low { color: #ff9aa9; }
+.pcard__row--meta { font-size: 11px; color: var(--text-3); }
+.pcard__worth { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pcard__props { display: flex; flex-wrap: wrap; gap: 3px; align-items: center; min-height: 10px; }
+.pcard__chip { width: 10px; height: 10px; border-radius: 2px; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.25); }
+.pcard__chip.is-mortgaged { opacity: 0.35; }
+.pcard__noprops { font-size: 11px; color: var(--text-3); }
+.pcard__card { font-size: 10.5px; color: var(--brand-3); margin-left: 4px; }
+.pcard__order {
+  position: absolute;
+  right: 8px;
+  bottom: 6px;
+  font-size: 10px;
+  color: var(--text-3);
+  font-weight: 700;
+  opacity: 0.6;
+}
+
+/* ---------------- Registro ---------------- */
+.log-panel { flex: 0 0 auto; max-height: 30%; }
+.log__body { overflow-y: auto; }
+.log__list { margin: 0; padding: 0 0 0 18px; display: flex; flex-direction: column; gap: 5px; font-size: 12.5px; color: var(--text-2); }
+.log__list li::marker { color: var(--text-3); }
+.log__empty { font-size: 12.5px; color: var(--text-3); }
+
+/* ---------------- Detalle de casilla ---------------- */
+.detail-panel { flex: 1 1 auto; min-height: 0; overflow: hidden; }
+.detail-panel .bh-panel__body { overflow-y: auto; }
+.detail__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 10px;
+  padding: 28px 10px;
+  color: var(--text-3);
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+.detail__empty-icon { font-size: 34px; color: var(--brand-2); opacity: 0.7; }
+
+.deed {
+  background: #f4efe1;
+  color: #1c1f33;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+  animation: fade-up 0.3s var(--ease) both;
+}
+.deed__head {
+  --group: #2b2f4a;
+  background: var(--group);
+  color: #fff;
+  padding: 12px 14px 12px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+.deed__icon { width: 30px; height: 30px; }
+.deed__group { font-size: 10px; text-transform: uppercase; letter-spacing: 0.14em; font-weight: 700; opacity: 0.9; }
+.deed__name { font-size: 17px; font-weight: 800; text-transform: uppercase; line-height: 1.15; }
+.deed__table { width: calc(100% - 24px); margin: 10px 12px 4px; border-collapse: collapse; font-size: 12.5px; }
+.deed__table td { padding: 3px 0; border-bottom: 1px dashed rgba(28, 31, 51, 0.15); }
+.deed__table td:last-child { text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
+.deed__table tr.is-base td { font-weight: 800; }
+.deed__facts { display: grid; grid-template-columns: repeat(3, 1fr); margin: 6px 12px 0; gap: 6px; }
+.deed__facts div { background: rgba(28, 31, 51, 0.06); border-radius: 6px; padding: 5px 6px; text-align: center; }
+.deed__facts dt { font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.06em; color: #5d6077; }
+.deed__facts dd { margin: 0; font-weight: 800; font-size: 13px; }
+.deed__text { padding: 12px 14px 4px; font-size: 13px; line-height: 1.5; }
+.deed__note { padding: 8px 12px 2px; font-size: 10.5px; color: #6c6f85; line-height: 1.4; }
+.deed__owner {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 10px 12px;
+  background: #1c1f33;
+  color: var(--text-1);
+  font-size: 12.5px;
+}
+.deed__owner-state { display: flex; gap: 4px; margin-left: auto; }
+.deed__free { color: var(--text-2); }
+.token--inline-sm { width: 22px; border-width: 1.5px; }
+
+/* ---------------- Herramientas de prueba ---------------- */
+.tools-panel { flex: none; border-style: dashed; border-color: rgba(255, 181, 71, 0.25); }
+.tools-panel .bh-panel__body { display: flex; flex-direction: column; gap: 10px; }
+.tools__group { display: flex; flex-direction: column; gap: 5px; }
+.tools__label { font-size: 11px; color: var(--text-3); font-weight: 600; }
+.tools__seg { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
+.tools__seg-btn {
+  padding: 5px 0;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-2);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.tools__seg-btn:hover { color: var(--text-1); }
+.tools__seg-btn.is-active { background: var(--brand); border-color: var(--brand); color: #fff; }
+.tools__select {
+  width: 100%;
+  padding: 7px 8px;
+  border-radius: 8px;
+  background: var(--bg-1);
+  color: var(--text-1);
+  border: 1px solid var(--border);
+  font: inherit;
+  font-size: 13px;
+}
+.tools__note { font-size: 10.5px; color: var(--text-3); line-height: 1.4; }
+
+/* ---------------- Ajustes para 1366×768 ---------------- */
+@media (max-height: 820px) {
+  .game-topbar { height: 44px; }
+  .magnate__layout { gap: 10px; padding: 8px 10px 10px; }
+  .magnate__left, .magnate__right { gap: 8px; }
+  .pcard { padding: 6px 8px 6px 10px; gap: 8px; grid-template-columns: 28px minmax(0, 1fr); }
+  .pcard__token { width: 28px; }
+  .pcard__main { gap: 2px; }
+  .pcard__name { font-size: 13px; }
+  .pcard__money { font-size: 14px; }
+  .players__list { gap: 5px; }
+  .bh-panel__header { padding: 9px 12px 6px; }
+  .bh-panel__body { padding: 2px 12px 12px; }
+  .deed__table { font-size: 11.5px; margin-top: 8px; }
+  .deed__table td { padding: 2px 0; }
+  .deed__head { padding: 9px 12px; }
+  .deed__name { font-size: 15px; }
+  .tools-panel .bh-panel__body { gap: 7px; }
+  .log-panel { max-height: 22%; }
+}

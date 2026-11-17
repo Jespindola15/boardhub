@@ -1,0 +1,152 @@
+/* ================= Logo ================= */
+.bh-logo { display: inline-flex; align-items: center; gap: 10px; }
+.bh-logo__text { font-family: var(--font-display); font-weight: 800; font-size: 19px; letter-spacing: -0.02em; }
+.bh-logo__text span {
+  background: var(--brand-gradient);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* ================= Header ================= */
+.site-header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: rgba(8, 10, 20, 0.72);
+  backdrop-filter: blur(14px);
+  border-bottom: 1px solid var(--border);
+}
+.site-header__inner {
+  max-width: 1360px;
+  margin: 0 auto;
+  height: var(--header-h);
+  padding: 0 32px;
+  display: flex;
+  align-items: center;
+  gap: 40px;
+}
+.site-nav { display: flex; gap: 6px; flex: 1; }
+.site-nav__link {
+  padding: 7px 12px;
+  border-radius: var(--radius-sm);
+  color: var(--text-2);
+  font-size: 14px;
+  font-weight: 600;
+  transition: color 0.2s, background 0.2s;
+}
+.site-nav__link:hover { color: var(--text-1); background: var(--surface); }
+.site-nav__link.is-active { color: var(--text-1); }
+.site-nav__link.is-disabled { color: var(--text-3); cursor: not-allowed; }
+.site-nav__link.is-disabled:hover { background: none; color: var(--text-3); }
+.site-nav__link small { font-size: 10px; color: var(--warn); text-transform: uppercase; letter-spacing: 0.06em; margin-left: 4px; }
+
+/* ================= Home ================= */
+.home { min-height: 100%; display: flex; flex-direction: column; }
+.home__main { flex: 1; max-width: 1360px; width: 100%; margin: 0 auto; padding: 0 32px 64px; }
+
+.hero {
+  display: grid;
+  grid-template-columns: 1.15fr 1fr;
+  gap: 56px;
+  align-items: center;
+  padding: 56px 0 64px;
+  animation: fade-up 0.6s var(--ease) both;
+}
+.hero__title { font-size: clamp(38px, 3.6vw, 56px); line-height: 1.06; margin: 18px 0 18px; font-weight: 800; }
+.hero__title span {
+  background: var(--brand-gradient);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.hero__lead { color: var(--text-2); font-size: 17px; line-height: 1.6; max-width: 540px; }
+.hero__lead strong { color: var(--text-1); }
+.hero__actions { display: flex; gap: 12px; margin-top: 28px; flex-wrap: wrap; }
+.hero__facts { display: flex; gap: 32px; list-style: none; padding: 0; margin: 36px 0 0; color: var(--text-3); font-size: 13px; }
+.hero__facts strong { display: block; color: var(--text-1); font-size: 22px; font-family: var(--font-display); }
+
+.section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 24px; margin-bottom: 22px; }
+.section-head h2 { font-size: 24px; font-weight: 800; }
+.section-head p { color: var(--text-3); font-size: 14px; max-width: 520px; text-align: right; }
+
+.catalog { padding: 8px 0 56px; }
+.catalog__grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }
+
+/* ================= Game card ================= */
+.game-card {
+  --accent: var(--brand);
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.25s var(--ease), box-shadow 0.25s, border-color 0.25s;
+}
+.game-card.is-available:hover {
+  transform: translateY(-4px);
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  box-shadow: 0 20px 50px -18px color-mix(in srgb, var(--accent) 60%, transparent);
+}
+.game-card.is-soon .game-art { filter: saturate(0.55) brightness(0.75); }
+.game-card__art { position: relative; aspect-ratio: 16 / 9; overflow: hidden; }
+.game-art { width: 100%; height: 100%; display: block; transition: transform 0.5s var(--ease); }
+.game-card.is-available:hover .game-art { transform: scale(1.04); }
+.game-card__badges { position: absolute; top: 12px; left: 12px; }
+.game-card__body { padding: 16px 18px 18px; display: flex; flex-direction: column; gap: 8px; flex: 1; }
+.game-card__meta { display: flex; gap: 6px; font-size: 11.5px; color: var(--text-3); flex-wrap: wrap; }
+.game-card__title { font-size: 20px; font-weight: 800; }
+.game-card__desc { color: var(--text-2); font-size: 13.5px; line-height: 1.5; flex: 1; }
+.game-card__actions { margin-top: 8px; }
+
+.game-card.is-featured { box-shadow: var(--shadow-2); border-color: rgba(255, 181, 71, 0.3); }
+.game-card.is-featured .game-card__title { font-size: 28px; }
+.game-card.is-featured .game-card__desc { font-size: 15px; }
+.game-card.is-featured .game-card__body { padding: 22px 24px 24px; }
+
+/* ================= How ================= */
+.how__steps { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+.how__step {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+}
+.how__n { font-family: var(--font-display); font-weight: 800; font-size: 13px; color: var(--brand-2); }
+.how__step h3 { font-size: 17px; }
+.how__step p { color: var(--text-2); font-size: 14px; line-height: 1.5; }
+
+.site-footer {
+  border-top: 1px solid var(--border);
+  padding: 18px 32px;
+  display: flex;
+  justify-content: space-between;
+  color: var(--text-3);
+  font-size: 12.5px;
+}
+
+/* ================= State pages ================= */
+.state-page {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  color: var(--text-2);
+  text-align: center;
+}
+.state-page h1 { color: var(--text-1); font-size: 26px; }
+.loader {
+  width: 38px; height: 38px;
+  border-radius: 50%;
+  border: 3px solid var(--border);
+  border-top-color: var(--brand);
+  animation: spin 0.9s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
