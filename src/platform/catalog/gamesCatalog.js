@@ -8,10 +8,12 @@
  * La plataforma (página principal, GameHost, router) no necesita cambios.
  *
  * status: 'available' | 'coming-soon'
+ * basedOn: de qué juego clásico sale (referencia; los nombres originales son marcas de sus dueños).
  */
 export const GAMES = [
   {
     slug: 'magnate',
+    basedOn: 'Basado en Monopoly',
     name: 'Magnate',
     tagline: 'Compra, alquila y negocia hasta dominar la ciudad.',
     description:
@@ -28,6 +30,7 @@ export const GAMES = [
   },
   {
     slug: 'ultima-carta',
+    basedOn: 'Basado en UNO',
     name: 'Última Carta',
     tagline: 'Descarta por color, número o símbolo y quédate sin cartas.',
     description:
@@ -44,6 +47,7 @@ export const GAMES = [
   },
   {
     slug: 'chinchon',
+    basedOn: 'Juego tradicional de naipes',
     name: 'Chinchón',
     tagline: 'Arma grupos y escaleras, corta con 5 y no pases de 101.',
     description: 'El clásico de baraja española con comodines: Chin-Chon, cortes con −10 y eliminación al pasar 101. Reglamento de los Juegos Bonaerenses.',
@@ -59,6 +63,7 @@ export const GAMES = [
   },
   {
     slug: 'truco',
+    basedOn: 'Juego tradicional de naipes',
     name: 'Truco',
     tagline: 'Envido, truco, retruco y vale cuatro. De a 2, 4 o 6.',
     description: 'Truco argentino con baraja española de 40 cartas: envido, real envido, falta envido, truco y pica-pica para 6. Sin flor y a 30 por defecto.',
@@ -74,6 +79,7 @@ export const GAMES = [
   },
   {
     slug: 'mazmorras',
+    basedOn: 'Basado en Munchkin',
     name: 'Mazmorras y Traiciones',
     tagline: 'Patea puertas, mata monstruos y traiciona a tus amigos.',
     description: 'Juego de cartas de saqueo de mazmorras: monstruos, maldiciones, razas, clases, objetos y combates donde todos pueden meterse. Llega al nivel 10. Cartas propias.',
@@ -89,6 +95,7 @@ export const GAMES = [
   },
   {
     slug: 'colonias',
+    basedOn: 'Basado en Catan',
     name: 'Colonias',
     tagline: 'Recolecta recursos, comercia y expande tus poblados.',
     description: 'Caminos, poblados y ciudades en una isla de 19 hexágonos: producción, comercio, ladrón y cartas de desarrollo. Reglas del juego básico de colonos.',
@@ -104,6 +111,7 @@ export const GAMES = [
   },
   {
     slug: 'dominio',
+    basedOn: 'Basado en Risk',
     name: 'Dominio',
     tagline: 'Conquista territorios con ejércitos y dados.',
     description: 'Despliega ejércitos, canjea cartas, tira los dados y domina los 42 territorios. Reglas del clásico de conquista mundial.',
@@ -119,6 +127,7 @@ export const GAMES = [
   },
   {
     slug: 'misterio',
+    basedOn: 'Basado en Cluedo',
     name: 'Misterio',
     tagline: 'Deduce quién, con qué y dónde.',
     description: 'Recorre la mansión, sugiere, descarta pistas en tu libreta y resuelve el caso antes que nadie. Reglas del clásico de deducción.',
@@ -134,6 +143,7 @@ export const GAMES = [
   },
   {
     slug: 'rutas',
+    basedOn: 'Basado en Ticket to Ride',
     name: 'Rutas',
     tagline: 'Colecciona vagones y conecta ciudades.',
     description: 'Ocupa tramos ferroviarios de Sudamérica y completa tus destinos secretos. Reglas del clásico de vagones y destinos.',
@@ -152,3 +162,7 @@ export const GAMES = [
 export function getGameBySlug(slug) {
   return GAMES.find((g) => g.slug === slug) ?? null;
 }
+
+/** Aviso de marcas: los juegos originales se nombran sólo como referencia. */
+export const TRADEMARK_NOTICE =
+  'Monopoly, Risk y Cluedo son marcas de Hasbro; UNO, de Mattel; Catan, de CATAN GmbH; Ticket to Ride, de Days of Wonder; Munchkin, de Steve Jackson Games. Se nombran sólo para indicar en qué juego se basa cada uno. BoardHub no está asociado con esas empresas y usa nombres, textos y dibujos propios.';

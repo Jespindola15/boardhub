@@ -24,6 +24,7 @@ export default function MagnateScreen({ manifest }) {
           <div className="setup__card setup__card--menu">
             <header className="setup__head">
               <span className="setup__logo">MAGNATE</span>
+              {manifest?.basedOn && <p className="cafe-menu-origin">{manifest.basedOn}</p>}
               <p>Compra, alquila y negocia hasta dominar la ciudad. De 2 a 8 jugadores.</p>
             </header>
             <Button variant="primary" size="lg" onClick={() => navigate('/salas?juego=magnate')}>

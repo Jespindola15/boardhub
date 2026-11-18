@@ -175,6 +175,7 @@ function Lobby({ room, me, call, mod, game }) {
             <span className="cafe-table__game">
               {game?.name ?? room.gameId}
               {room.match > 1 ? `, partida ${room.match}` : ''}
+              {game?.basedOn && <small className="cafe-table__origin">{game.basedOn}</small>}
             </span>
             <span className="cafe-table__code" aria-label={`Código ${room.code.split('').join(' ')}`}>
               {room.code}
@@ -286,6 +287,7 @@ function NextGame({ room, me, call, isHost, host }) {
                 {g.name}
                 {current ? ', elegido' : ''}
               </span>
+              {g.basedOn && <span className="cafe-vote__info cafe-origin">{g.basedOn}</span>}
               <span className="cafe-vote__info">
                 {lim.min === lim.max ? `${lim.min}` : `${lim.min} a ${lim.max}`} jugadores{fits ? '' : n < lim.min ? `, faltan ${lim.min - n}` : `, sobran ${n - lim.max}`}
               </span>

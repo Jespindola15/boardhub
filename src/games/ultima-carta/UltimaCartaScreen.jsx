@@ -40,7 +40,7 @@ export default function UltimaCartaScreen({ manifest }) {
           </Button>
         }
       />
-      {mode === 'menu' && <OnlineStart onLocal={() => setMode('local')} />}
+      {mode === 'menu' && <OnlineStart basedOn={manifest?.basedOn} onLocal={() => setMode('local')} />}
       {mode === 'local' && !local.state && <LocalSetup onStart={local.start} onBack={() => setMode('menu')} />}
       {mode === 'local' && local.state && <LocalTable state={local.state} send={local.send} onNewGame={local.quit} />}
       {rules && <RulesModal onClose={() => setRules(false)} />}

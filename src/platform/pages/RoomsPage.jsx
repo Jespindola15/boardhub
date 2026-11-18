@@ -42,6 +42,7 @@ export default function RoomsPage() {
                 {onlineGames.map((g) => (
                   <button key={g.slug} type="button" role="radio" aria-checked={gameId === g.slug} onClick={() => setGameId(g.slug)}>
                     <strong>{g.name}</strong>
+                    {g.basedOn && <small className="cafe-origin">{g.basedOn}</small>}
                     <small>{range(g)}</small>
                   </button>
                 ))}
@@ -159,6 +160,7 @@ function PublicRooms() {
             return (
               <li key={r.code} className="paper" style={{ '--accent': g?.accent ?? 'var(--cafe-brick)' }}>
                 <span className="cafe-open__game">{g?.name ?? r.gameId}</span>
+                {g?.basedOn && <span className="cafe-open__info">{g.basedOn}</span>}
                 <span className="cafe-open__info">
                   Mesa de {r.host}, {r.players} de {r.max} sentados
                 </span>

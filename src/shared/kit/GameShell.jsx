@@ -54,7 +54,7 @@ export default function GameShell({ manifest, slug, accent, logo, intro, engine,
           </Button>
         }
       />
-      {mode === 'menu' && <StartMenu slug={slug} logo={logo} accent={accent} intro={intro} Options={Options} defaultOptions={defaultOptions} onLocal={() => setMode('local')} />}
+      {mode === 'menu' && <StartMenu basedOn={manifest?.basedOn} slug={slug} logo={logo} accent={accent} intro={intro} Options={Options} defaultOptions={defaultOptions} onLocal={() => setMode('local')} />}
       {mode === 'local' && !local.state && (
         <LocalSetup logo={logo} accent={accent} min={min} max={max} Options={Options} defaultOptions={defaultOptions} checkPlayers={checkPlayers} onStart={local.start} onBack={() => setMode('menu')} />
       )}
@@ -69,7 +69,7 @@ export default function GameShell({ manifest, slug, accent, logo, intro, engine,
   );
 }
 
-function StartMenu({ slug, logo, accent, intro, Options, defaultOptions, onLocal }) {
+function StartMenu({ basedOn, slug, logo, accent, intro, Options, defaultOptions, onLocal }) {
   const [name, setName] = useState(lastName());
   const [options, setOptions] = useState(defaultOptions);
   const [visibility, setVisibility] = useState('public');
@@ -91,6 +91,7 @@ function StartMenu({ slug, logo, accent, intro, Options, defaultOptions, onLocal
         <span className="kit-logo" style={{ '--accent': accent }}>
           {logo}
         </span>
+        {basedOn && <p className="cafe-menu-origin">{basedOn}</p>}
         {intro && <p>{intro}</p>}
         <section className="kit-block">
           <h3>Abrir una mesa en línea</h3>

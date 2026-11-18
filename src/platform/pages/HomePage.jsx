@@ -1,7 +1,7 @@
 import SiteHeader from '../components/SiteHeader.jsx';
 import GameArt from '../components/GameArt.jsx';
 import Button from '../../shared/Button.jsx';
-import { GAMES } from '../catalog/gamesCatalog.js';
+import { GAMES, TRADEMARK_NOTICE } from '../catalog/gamesCatalog.js';
 import { navigate } from '../../app/router.js';
 import '../components/platform.css';
 
@@ -53,7 +53,7 @@ export default function HomePage() {
               <button key={g.slug} type="button" className="cafe-spread__card paper" style={deal(i)} onClick={() => navigate(`/juegos/${g.slug}`)}>
                 <span className="cafe-spread__body">
                   <span className="cafe-spread__name">{g.name}</span>
-                  <span className="cafe-spread__meta">{players(g)} jugadores</span>
+                  <span className="cafe-spread__meta">{g.basedOn ?? `${players(g)} jugadores`}</span>
                 </span>
                 <span className="cafe-spread__art">
                   <GameArt art={g.art} />
@@ -76,6 +76,7 @@ export default function HomePage() {
                 </div>
                 <div className="cafe-box__body">
                   <h3 className="cafe-box__title">{g.name}</h3>
+                  {g.basedOn && <p className="cafe-box__origin">{g.basedOn}</p>}
                   <p className="cafe-box__meta">
                     {g.category}, {players(g)} jugadores, {g.duration}
                   </p>
@@ -117,8 +118,8 @@ export default function HomePage() {
       </main>
 
       <footer className="cafe-footer">
-        <span>BoardHub</span>
-        <span>{games.length} juegos, todos con mesas en línea</span>
+        <p className="cafe-footer__legal">{TRADEMARK_NOTICE}</p>
+        <span>BoardHub, {games.length} juegos con mesas en línea</span>
       </footer>
     </div>
   );

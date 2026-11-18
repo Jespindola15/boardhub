@@ -7,7 +7,7 @@ import { lastName } from '../../../net/session.js';
 import { navigate } from '../../../app/router.js';
 
 /** Menú inicial: crear sala, unirse con código o jugar en esta PC. */
-export default function OnlineStart({ onLocal }) {
+export default function OnlineStart({ onLocal, basedOn }) {
   const [name, setName] = useState(lastName());
   const [scoring, setScoring] = useState('winner');
   const [visibility, setVisibility] = useState('public');
@@ -27,6 +27,7 @@ export default function OnlineStart({ onLocal }) {
     <div className="cm-setup cafe-stage">
       <div className="cm-setup__card cm-start">
         <span className="cm-logo">ÚLTIMA CARTA</span>
+        {basedOn && <p className="cafe-menu-origin">{basedOn}</p>}
         <p>Juego de descarte por colores para 2 a 8 jugadores, con las reglas oficiales de la edición clásica.</p>
 
         <section className="cm-start__block">

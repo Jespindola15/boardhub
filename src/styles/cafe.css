@@ -444,3 +444,14 @@
 .cafe-stage input[type='checkbox'], .cafe-stage input[type='radio'], .cafe .paper input[type='checkbox'] { accent-color: var(--cafe-brick); }
 /* Espacio para las fichas que asoman por fuera de la mesa */
 .cafe-table-wrap { padding: 46px 40px 0; gap: 84px; }
+
+/* Juego en el que se basa cada uno */
+.cafe-box__origin { font-size: 15px; font-weight: 700; color: var(--cafe-brick); margin-top: -2px; }
+.cafe-origin { color: var(--cafe-brick) !important; font-weight: 700; }
+.cafe-games button[aria-checked='true'] .cafe-origin { color: var(--cafe-brass-light) !important; }
+.cafe-table__origin { display: block; font-family: var(--cafe-sans); font-size: 14px; color: var(--cafe-brass-light); }
+.cafe-spread__meta { color: var(--cafe-brick); font-weight: 700; }
+.cafe-footer { gap: 40px; align-items: flex-end; }
+.cafe-footer__legal { max-width: 70em; font-size: 13px; line-height: 1.5; color: var(--text-3); }
+.cafe-footer > span { white-space: nowrap; }
+.cafe-stage .cafe-menu-origin { color: var(--cafe-brick) !important; font-weight: 700; font-size: 17px !important; margin-top: -6px; }
