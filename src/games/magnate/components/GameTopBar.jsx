@@ -10,7 +10,7 @@ export default function GameTopBar({ manifest, inGame, onQuit }) {
   const [confirm, setConfirm] = useState(false);
 
   return (
-    <header className="game-topbar">
+    <header className="game-topbar wood">
       <a href="#/" className="game-topbar__home" aria-label="Volver a BoardHub">
         <Logo size={24} />
       </a>

@@ -20,17 +20,17 @@ export default function MagnateScreen({ manifest }) {
     <div className="magnate">
       <GameTopBar manifest={manifest} inGame={mode === 'local' && Boolean(state)} onQuit={() => { quit(); setMode('menu'); }} />
       {mode === 'menu' && (
-        <div className="setup">
+        <div className="setup cafe-stage">
           <div className="setup__card setup__card--menu">
             <header className="setup__head">
               <span className="setup__logo">MAGNATE</span>
               <p>Compra, alquila y negocia hasta dominar la ciudad. De 2 a 8 jugadores.</p>
             </header>
             <Button variant="primary" size="lg" onClick={() => navigate('/salas?juego=magnate')}>
-              Jugar en línea con amigos
+              Abrir o buscar una mesa en línea
             </Button>
             <Button size="lg" onClick={() => setMode('local')}>
-              Jugar en esta PC
+              Jugar en esta compu, pasándola
             </Button>
           </div>
         </div>

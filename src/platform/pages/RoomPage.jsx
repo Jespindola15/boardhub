@@ -1,13 +1,12 @@
 import { lazy, Suspense, useMemo, useState } from 'react';
 import useRoom from '../../net/useRoom.js';
 import { lastName } from '../../net/session.js';
-import { getGameBySlug } from '../catalog/gamesCatalog.js';
+import { GAMES, getGameBySlug } from '../catalog/gamesCatalog.js';
 import GameBar from '../components/GameBar.jsx';
 import Button from '../../shared/Button.jsx';
-import Badge from '../../shared/Badge.jsx';
 import { paletteHex } from '../../shared/playerPalette.js';
 import { navigate } from '../../app/router.js';
-import { VisibilityToggle } from './RoomsPage.jsx';
+import { CafeVisibility } from './RoomsPage.jsx';
 import '../components/platform.css';
 
 const cache = new Map();
@@ -23,24 +22,30 @@ function onlineModule(game) {
   return cache.get(game.slug);
 }
 
-/** Sala online: unirse con nombre, sala de espera y partida. */
+const LIGHT_CHIPS = new Set(['snow', 'gold', 'mint', 'lime', 'amber', 'teal']);
+const chipStyle = (colorId) => ({ '--chip': paletteHex(colorId) });
+const chipClass = (colorId, size = '') => `cafe-chip ${size ? `cafe-chip--${size}` : ''} ${LIGHT_CHIPS.has(colorId) ? 'is-light' : ''}`;
+
+/** Mesa online: sentarse con un nombre, sala de espera (con votación del próximo juego) y partida. */
 export default function RoomPage({ code }) {
   const r = useRoom(code);
   const game = r.room ? getGameBySlug(r.room.gameId) : null;
   const mod = useMemo(() => (game?.loadOnline ? onlineModule(game) : null), [game]);
   const [rules, setRules] = useState(false);
   const [confirmLeave, setConfirmLeave] = useState(false);
+  const backToTable = () => r.call('room:return');
 
   const leave = async () => {
     await r.leave();
     navigate('/');
   };
 
+  const inLobby = !r.room || r.room.status === 'lobby' || r.status !== 'joined';
+
   const bar = (
     <GameBar
-      title={game?.name ?? 'Sala'}
-      accent={game?.accent}
-      badge={`Sala ${code}${r.connected ? '' : ' · reconectando…'}`}
+      title={game?.name ?? 'Mesa'}
+      badge={`Mesa ${code}${r.connected ? '' : ', reconectando…'}`}
       actions={
         <>
           {mod && (
@@ -51,11 +56,11 @@ export default function RoomPage({ code }) {
           {r.status === 'joined' &&
             (confirmLeave ? (
               <Button size="sm" variant="danger" onClick={leave}>
-                Confirmar: salir de la sala
+                Sí, levantarme de la mesa
               </Button>
             ) : (
               <Button size="sm" variant="ghost" onClick={() => setConfirmLeave(true)}>
-                Salir de la sala
+                Levantarme de la mesa
               </Button>
             ))}
         </>
@@ -65,24 +70,39 @@ export default function RoomPage({ code }) {
 
   let body;
   if (r.status === 'connecting') body = <Centered>Conectando con el servidor…</Centered>;
-  else if (r.status === 'removed') body = <Centered>El anfitrión te quitó de la sala.</Centered>;
-  else if (r.status === 'error') body = <Centered>{r.error ?? 'No se pudo entrar a la sala.'}</Centered>;
+  else if (r.status === 'removed') body = <Centered>El anfitrión te sacó de la mesa.</Centered>;
+  else if (r.status === 'error')
+    body = (
+      <Centered>
+        <p>{r.error ?? 'No se pudo entrar a la mesa.'}</p>
+        <Button onClick={() => navigate('/salas')}>Ver mesas abiertas</Button>
+      </Centered>
+    );
   else if (r.status === 'need-join') body = <JoinForm code={code} onJoin={r.join} error={r.error} />;
-  else if (!r.room) body = <Centered>Cargando sala…</Centered>;
-  else if (r.room.status === 'lobby') body = <Lobby room={r.room} me={r.me} call={r.call} mod={mod} />;
+  else if (!r.room) body = <Centered>Cargando la mesa…</Centered>;
+  else if (r.room.status === 'lobby') body = <Lobby room={r.room} me={r.me} call={r.call} mod={mod} game={game} />;
   else if (r.view && mod)
     body = (
-      <Suspense fallback={<Centered>Cargando mesa…</Centered>}>
+      <Suspense fallback={<Centered>Repartiendo…</Centered>}>
         <div className="room-game">
-          <mod.Table view={r.view} send={r.send} onNextRound={() => navigate('/salas')} nextRoundLabel="Volver a las salas" />
+          <mod.Table view={r.view} send={r.send} onNextRound={backToTable} nextRoundLabel="Volver a la mesa" />
           <DisconnectedBar room={r.room} me={r.me} call={r.call} />
+          {r.room.status === 'finished' && (
+            <div className="cafe-done wood" role="status">
+              <strong>Terminó la partida.</strong>
+              <span>Vuelvan a la mesa para elegir otro juego.</span>
+              <Button variant="primary" onClick={backToTable}>
+                Volver a la mesa
+              </Button>
+            </div>
+          )}
         </div>
       </Suspense>
     );
   else body = <Centered>Esperando el estado de la partida…</Centered>;
 
   return (
-    <div className="room-page">
+    <div className={`room-page ${inLobby ? 'cafe' : ''}`}>
       {bar}
       {body}
       {rules && mod && (
@@ -99,26 +119,38 @@ export default function RoomPage({ code }) {
   );
 }
 
-const Centered = ({ children }) => <div className="state-page">{children}</div>;
+const Centered = ({ children }) => <div className="cafe-state">{children}</div>;
 
 function JoinForm({ code, onJoin, error }) {
   const [name, setName] = useState(lastName());
   return (
-    <div className="state-page">
-      <div className="room-card">
-        <h2>Unirse a la sala {code}</h2>
-        <input className="rooms__input" autoFocus placeholder="Tu nombre" maxLength={16} value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && name.trim() && onJoin(name)} />
-        <Button variant="primary" size="lg" disabled={!name.trim()} onClick={() => onJoin(name)}>
-          Entrar
-        </Button>
-        {error && <p className="rooms__error">{error}</p>}
+    <div className="cafe-state">
+      <div className="cafe-sheet paper">
+        <h2>Sentarse en la mesa {code}</h2>
+        <label className="cafe-field">
+          Tu nombre
+          <input autoFocus maxLength={16} value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && name.trim() && onJoin(name)} />
+        </label>
+        <div>
+          <Button variant="primary" size="lg" disabled={!name.trim()} onClick={() => onJoin(name)}>
+            Sentarse
+          </Button>
+        </div>
+        {error && <p className="cafe-error">{error}</p>}
       </div>
     </div>
   );
 }
 
-function Lobby({ room, me, call, mod }) {
+/** Lugares alrededor de la mesa (elipse), empezando abajo al centro. */
+function seatPos(i, n) {
+  const a = Math.PI / 2 + (i * 2 * Math.PI) / n;
+  return { left: `${50 + Math.cos(a) * 47}%`, top: `${50 + Math.sin(a) * 47}%` };
+}
+
+function Lobby({ room, me, call, mod, game }) {
   const isHost = room.hostId === me;
+  const host = room.seats.find((s) => s.playerId === room.hostId);
   const link = `${location.origin}${location.pathname}#/sala/${room.code}`;
   const [copied, setCopied] = useState(false);
   const copy = async () => {
@@ -127,67 +159,176 @@ function Lobby({ room, me, call, mod }) {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      /* el usuario puede copiar el código a mano */
+      /* se puede copiar el código a mano */
     }
   };
-  const enough = room.seats.length >= room.limits.min && !room.countError;
+  const n = room.seats.length;
+  const ready = n >= room.limits.min && n <= room.limits.max && !room.countError;
+  const places = Math.min(8, Math.max(room.limits.max, n));
+  const startLabel = ready ? 'Empezar partida' : room.countError ?? (n < room.limits.min ? `Faltan ${room.limits.min - n} para empezar` : `Este juego admite hasta ${room.limits.max}`);
 
   return (
-    <div className="state-page">
-      <div className="room-card room-card--lobby">
-        <span className="room-code">{room.code}</span>
-        <p>Comparte este código o el enlace con tus amigos.</p>
-        <Button size="sm" onClick={copy}>
-          {copied ? '¡Enlace copiado!' : 'Copiar enlace de invitación'}
-        </Button>
-        <div className="room-vis">
-          Visibilidad de la sala
-          <VisibilityToggle value={room.visibility ?? 'private'} disabled={!isHost} onChange={(visibility) => call('room:visibility', { visibility })} />
+    <div className="cafe-lobby">
+      <div className="cafe-table-wrap">
+        <div className="cafe-table" role="group" aria-label={`Mesa ${room.code}, ${n} sentados`}>
+          <div className="cafe-table__felt">
+            <span className="cafe-table__game">
+              {game?.name ?? room.gameId}
+              {room.match > 1 ? `, partida ${room.match}` : ''}
+            </span>
+            <span className="cafe-table__code" aria-label={`Código ${room.code.split('').join(' ')}`}>
+              {room.code}
+            </span>
+            <Button size="sm" onClick={copy}>
+              {copied ? 'Enlace copiado' : 'Copiar enlace para invitar'}
+            </Button>
+          </div>
+          {Array.from({ length: places }, (_, i) => {
+            const s = room.seats[i];
+            if (!s)
+              return (
+                <div key={`e${i}`} className="cafe-seat is-empty" style={seatPos(i, places)}>
+                  <span className="cafe-seat__empty" />
+                  <span className="cafe-seat__name">Libre</span>
+                </div>
+              );
+            return (
+              <div key={s.playerId} className={`cafe-seat ${s.connected ? '' : 'is-away'}`} style={seatPos(i, places)} title={s.connected ? 'Conectado' : 'Desconectado'}>
+                <span className={chipClass(s.colorId)} style={chipStyle(s.colorId)}>
+                  {s.name[0].toUpperCase()}
+                </span>
+                <span className="cafe-seat__name">
+                  {s.name}
+                  {s.playerId === me ? ' (tú)' : ''}
+                </span>
+                {s.playerId === room.hostId && <span className="cafe-seat__tag">Anfitrión</span>}
+                {!s.connected && s.playerId !== room.hostId && <span className="cafe-seat__tag">Desconectado</span>}
+                {isHost && s.playerId !== me && (
+                  <button type="button" className="cafe-seat__kick" onClick={() => call('room:remove', { playerId: s.playerId })}>
+                    Sacar
+                  </button>
+                )}
+              </div>
+            );
+          })}
         </div>
-        <h3>
-          Jugadores {room.seats.length}/{room.limits.max}
-        </h3>
-        <ul className="room-seats">
-          {room.seats.map((s) => (
-            <li key={s.playerId}>
-              <span className="bh-avatar" style={{ background: paletteHex(s.colorId) }}>
-                {s.name[0].toUpperCase()}
-              </span>
-              <span className="room-seats__name">
-                {s.name}
-                {s.playerId === me && <small> (tú)</small>}
-              </span>
-              {s.playerId === room.hostId && <Badge tone="brand">Anfitrión</Badge>}
-              <span className={`room-dot ${s.connected ? 'is-on' : ''}`} title={s.connected ? 'Conectado' : 'Desconectado'} />
-              {isHost && s.playerId !== me && (
-                <button type="button" className="room-kick" onClick={() => call('room:remove', { playerId: s.playerId })} title="Quitar de la sala">
-                  ✕
-                </button>
-              )}
-            </li>
-          ))}
-        </ul>
+        <div className="cafe-table-actions">
+          {isHost ? (
+            <Button variant="primary" size="lg" disabled={!ready} onClick={() => call('room:start')}>
+              {startLabel}
+            </Button>
+          ) : (
+            <p className="cafe-table-note">{ready ? `Esperando a que ${host?.name ?? 'el anfitrión'} empiece la partida.` : `${startLabel.replace(/\.$/, '')}.`}</p>
+          )}
+        </div>
+      </div>
+
+      <div className="cafe-side">
+        <NextGame room={room} me={me} call={call} isHost={isHost} host={host} />
+
         {mod && (
-          <Suspense fallback={null}>
-            <mod.Options options={room.options} disabled={!isHost} onChange={(options) => call('room:options', { options })} />
-          </Suspense>
+          <section className="cafe-sheet paper" aria-labelledby="opciones">
+            <h2 id="opciones">Opciones de {game?.name}</h2>
+            <Suspense fallback={<p className="cafe-sheet__hint">Cargando opciones…</p>}>
+              <mod.Options options={room.options} disabled={!isHost} onChange={(options) => call('room:options', { options })} />
+            </Suspense>
+            {!isHost && <p className="cafe-sheet__hint">Las elige {host?.name ?? 'el anfitrión'}.</p>}
+          </section>
         )}
-        {isHost ? (
-          <Button variant="primary" size="lg" disabled={!enough} onClick={() => call('room:start')}>
-            {enough ? 'Empezar partida' : room.countError ?? `Hacen falta ${room.limits.min} jugadores`}
-          </Button>
-        ) : (
-          <p className="rooms__note">Esperando a que el anfitrión empiece la partida…</p>
+
+        <section className="cafe-sheet paper" aria-labelledby="acceso">
+          <h2 id="acceso">Quién puede entrar</h2>
+          <CafeVisibility value={room.visibility ?? 'private'} disabled={!isHost} onChange={(visibility) => call('room:visibility', { visibility })} labelledBy="acceso" />
+        </section>
+
+        {room.results?.length > 0 && (
+          <section className="cafe-sheet paper" aria-labelledby="anotador">
+            <h2 id="anotador">Partidas en esta mesa</h2>
+            <ol className="cafe-score">
+              {room.results.map((x) => (
+                <li key={x.match}>
+                  {getGameBySlug(x.gameId)?.name ?? x.gameId}: <span>{x.names.length ? `ganó ${x.names.join(' y ')}` : 'sin ganador'}</span>
+                </li>
+              ))}
+            </ol>
+          </section>
         )}
       </div>
     </div>
   );
 }
 
-/** Aviso de jugadores desconectados durante la partida; el anfitrión puede quitarlos. */
+/** Votación del próximo juego: todos votan, el anfitrión confirma. */
+function NextGame({ room, me, call, isHost, host }) {
+  const games = GAMES.filter((g) => g.online && room.games?.[g.slug]);
+  const votes = room.votes ?? {};
+  const myVote = votes[me];
+  const byGame = (slug) => room.seats.filter((s) => votes[s.playerId] === slug);
+  const n = room.seats.length;
+  const sorted = [...games].sort((a, b) => byGame(b.slug).length - byGame(a.slug).length);
+  const voted = Object.keys(votes).length;
+
+  return (
+    <section className="cafe-sheet paper" aria-labelledby="proximo">
+      <h2 id="proximo">{room.match > 1 ? 'Próximo juego' : 'Qué jugamos'}</h2>
+      <p className="cafe-sheet__hint">
+        Todos votan y {isHost ? 'tú eliges' : `elige ${host?.name ?? 'el anfitrión'}`}. Votaron {voted} de {n}.
+      </p>
+      <ul className="cafe-vote">
+        {sorted.map((g) => {
+          const who = byGame(g.slug);
+          const lim = room.games[g.slug];
+          const fits = n >= lim.min && n <= lim.max;
+          const current = g.slug === room.gameId;
+          return (
+            <li key={g.slug} className={`${current ? 'is-current' : ''} ${fits ? '' : 'is-blocked'}`} style={{ '--accent': g.accent }}>
+              <span className="cafe-vote__name">
+                {g.name}
+                {current ? ', elegido' : ''}
+              </span>
+              <span className="cafe-vote__info">
+                {lim.min === lim.max ? `${lim.min}` : `${lim.min} a ${lim.max}`} jugadores{fits ? '' : n < lim.min ? `, faltan ${lim.min - n}` : `, sobran ${n - lim.max}`}
+              </span>
+              {who.length > 0 && (
+                <span className="cafe-vote__chips" aria-label={`Votos: ${who.map((s) => s.name).join(', ')}`}>
+                  {who.map((s) => (
+                    <span key={s.playerId} className={chipClass(s.colorId, 'xs')} style={chipStyle(s.colorId)} title={s.name}>
+                      {s.name[0].toUpperCase()}
+                    </span>
+                  ))}
+                </span>
+              )}
+              <span className="cafe-vote__btns">
+                <span className="cafe-vote__count" aria-hidden="true">
+                  {who.length || ''}
+                </span>
+                {myVote === g.slug ? (
+                  <Button size="sm" variant="ghost" onClick={() => call('room:vote', { gameId: null })}>
+                    Quitar voto
+                  </Button>
+                ) : (
+                  <Button size="sm" onClick={() => call('room:vote', { gameId: g.slug })}>
+                    Votar
+                  </Button>
+                )}
+                {isHost && !current && (
+                  <Button size="sm" variant="primary" onClick={() => call('room:game', { gameId: g.slug })}>
+                    Elegir
+                  </Button>
+                )}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  );
+}
+
+/** Aviso de jugadores desconectados durante la partida; el anfitrión puede sacarlos. */
 function DisconnectedBar({ room, me, call }) {
   const away = room.seats.filter((s) => !s.connected && !s.left && s.playerId !== me);
-  if (!away.length) return null;
+  if (!away.length || room.status !== 'playing') return null;
   return (
     <div className="room-away">
       {away.map((s) => (
@@ -195,7 +336,7 @@ function DisconnectedBar({ room, me, call }) {
           {s.name} se desconectó.
           {room.hostId === me && (
             <Button size="sm" variant="ghost" onClick={() => call('room:remove', { playerId: s.playerId })}>
-              Quitar de la partida
+              Sacarlo de la partida
             </Button>
           )}
         </span>

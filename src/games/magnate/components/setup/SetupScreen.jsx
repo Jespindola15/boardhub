@@ -48,7 +48,7 @@ export default function SetupScreen({ onStart }) {
   const valid = names.every(Boolean) && new Set(names.map((n) => n.toLowerCase())).size === names.length;
 
   return (
-    <div className="setup">
+    <div className="setup cafe-stage">
       <div className="setup__card">
         <header className="setup__head">
           <span className="setup__logo">MAGNATE</span>

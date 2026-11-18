@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "BoardHub Online \u2014 plataforma de juegos de mesa en el navegador.",
+  "description": "BoardHub Online — plataforma de juegos de mesa en el navegador.",
   "scripts": {
     "dev": "vite",
     "server": "node server/index.js",
@@ -17,6 +17,8 @@
     "deploy": "vite build && wrangler deploy"
   },
   "dependencies": {
+    "@fontsource/alegreya": "^5.3.0",
+    "@fontsource/alegreya-sans": "^5.3.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "ws": "^8.23.0"

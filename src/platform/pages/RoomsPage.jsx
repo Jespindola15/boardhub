@@ -8,7 +8,9 @@ import { lastName } from '../../net/session.js';
 import { navigate, hashQuery } from '../../app/router.js';
 import '../components/platform.css';
 
-/** Salas: crear (pública o privada), ver las públicas abiertas o entrar con un código. */
+const range = (g) => (g.players.min === g.players.max ? `${g.players.min} jugadores` : `${g.players.min} a ${g.players.max} jugadores`);
+
+/** Salas: abrir una mesa (pública o privada), sentarse con un código o ver las mesas abiertas. */
 export default function RoomsPage() {
   const onlineGames = GAMES.filter((g) => g.online);
   const wanted = hashQuery().get('juego');
@@ -28,66 +30,83 @@ export default function RoomsPage() {
   };
 
   return (
-    <div className="home">
+    <div className="cafe cafe-page">
       <SiteHeader active="salas" />
-      <main className="home__main rooms">
-        <div className="section-head">
-          <h2>Salas online</h2>
-          <p>Crea una sala pública para que cualquiera se sume, o privada para jugar sólo con quien tenga el código. Sin cuentas.</p>
-        </div>
-        <div className="rooms__grid">
-          <section className="rooms__card">
-            <h3>Crear sala</h3>
-            <div className="rooms__field">
-              Juego
-              <div className="rooms__games">
+      <main className="cafe-main">
+        <div className="cafe-rooms">
+          <section className="cafe-sheet paper" aria-labelledby="abrir">
+            <h2 id="abrir">Abrir una mesa</h2>
+            <div className="cafe-field">
+              <span id="juego">Juego</span>
+              <div className="cafe-games" role="radiogroup" aria-labelledby="juego">
                 {onlineGames.map((g) => (
-                  <button key={g.slug} type="button" className={`rooms__game ${gameId === g.slug ? 'is-active' : ''}`} style={{ '--accent': g.accent }} onClick={() => setGameId(g.slug)}>
+                  <button key={g.slug} type="button" role="radio" aria-checked={gameId === g.slug} onClick={() => setGameId(g.slug)}>
                     <strong>{g.name}</strong>
-                    <small>
-                      {g.players.min}–{g.players.max} jugadores
-                    </small>
+                    <small>{range(g)}</small>
                   </button>
                 ))}
               </div>
             </div>
-            <label className="rooms__field">
+            <label className="cafe-field">
               Tu nombre
-              <input className="rooms__input" maxLength={16} value={name} onChange={(e) => setName(e.target.value)} />
+              <input maxLength={16} value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && name.trim() && create()} />
             </label>
-            <div className="rooms__field">
-              Visibilidad
-              <VisibilityToggle value={visibility} onChange={setVisibility} />
+            <div className="cafe-field">
+              <span id="vis">Quién puede entrar</span>
+              <CafeVisibility value={visibility} onChange={setVisibility} labelledBy="vis" />
             </div>
-            <Button variant="primary" size="lg" disabled={!name.trim() || !gameId || busy} onClick={create}>
-              Crear sala {visibility === 'public' ? 'pública' : 'privada'}
-            </Button>
-            <p className="rooms__note">Las opciones del juego se eligen en la sala, antes de empezar.</p>
-          </section>
-          <div className="rooms__side">
-            <section className="rooms__card">
-              <h3>Unirse con código</h3>
-              <input
-                className="rooms__input rooms__input--code"
-                placeholder="ABC123"
-                maxLength={6}
-                value={code}
-                onChange={(e) => setCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
-                onKeyDown={(e) => e.key === 'Enter' && code.length === 6 && navigate(`/sala/${code}`)}
-              />
-              <Button size="lg" disabled={code.length !== 6} onClick={() => navigate(`/sala/${code}`)}>
-                Entrar a la sala
+            <div>
+              <Button variant="primary" size="lg" disabled={!name.trim() || !gameId || busy} onClick={create}>
+                Abrir la mesa
               </Button>
-            </section>
-          </div>
+            </div>
+            <p className="cafe-sheet__hint">Las opciones del juego se eligen en la mesa, antes de empezar. Al terminar pueden quedarse y elegir otro juego.</p>
+            {error && <p className="cafe-error">{error}</p>}
+          </section>
+
+          <section className="cafe-ticket paper" aria-labelledby="sentarse">
+            <h2 id="sentarse">Sentarse con un código</h2>
+            <p className="cafe-sheet__hint">Pídele a quien abrió la mesa el código de seis letras.</p>
+            <input
+              className="cafe-code-input"
+              aria-label="Código de la mesa"
+              placeholder="ABC123"
+              maxLength={6}
+              value={code}
+              onChange={(e) => setCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
+              onKeyDown={(e) => e.key === 'Enter' && code.length === 6 && navigate(`/sala/${code}`)}
+            />
+            <div>
+              <Button size="lg" disabled={code.length !== 6} onClick={() => navigate(`/sala/${code}`)}>
+                Sentarse
+              </Button>
+            </div>
+          </section>
         </div>
-        {error && <p className="rooms__error">{error}</p>}
         <PublicRooms />
       </main>
     </div>
   );
 }
 
+/** Pública o privada, para las páginas con estilo de mesa. */
+export function CafeVisibility({ value, onChange, disabled, labelledBy }) {
+  return (
+    <div className="cafe-vis" role="radiogroup" aria-labelledby={labelledBy}>
+      {[
+        ['public', 'Pública', 'Aparece en las mesas abiertas.'],
+        ['private', 'Privada', 'Sólo entra quien tenga el código.'],
+      ].map(([v, label, hint]) => (
+        <button key={v} type="button" role="radio" aria-checked={value === v} disabled={disabled} onClick={() => onChange(v)}>
+          <strong>{label}</strong>
+          <small>{hint}</small>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** Versión usada por los menús de cada juego. */
 export function VisibilityToggle({ value, onChange, disabled }) {
   return (
     <div className="vis-toggle" role="radiogroup">
@@ -106,7 +125,7 @@ export function VisibilityToggle({ value, onChange, disabled }) {
 
 function PublicRooms() {
   const [rooms, setRooms] = useState(undefined);
-  const [filter, setFilter] = useState('');
+  const [filter, setFilter] = useState(hashQuery().get('juego') ?? '');
   const load = useCallback(async () => setRooms(await listPublicRooms(filter || undefined)), [filter]);
   useEffect(() => {
     load();
@@ -115,10 +134,10 @@ function PublicRooms() {
   }, [load]);
 
   return (
-    <section className="public-rooms">
-      <div className="public-rooms__head">
-        <h3>Salas públicas abiertas</h3>
-        <select className="rooms__input public-rooms__filter" value={filter} onChange={(e) => setFilter(e.target.value)}>
+    <section className="cafe-open" aria-labelledby="abiertas">
+      <div className="cafe-open__head">
+        <h2 id="abiertas">Mesas abiertas</h2>
+        <select aria-label="Filtrar por juego" value={filter} onChange={(e) => setFilter(e.target.value)}>
           <option value="">Todos los juegos</option>
           {GAMES.filter((g) => g.online).map((g) => (
             <option key={g.slug} value={g.slug}>
@@ -130,22 +149,21 @@ function PublicRooms() {
           Actualizar
         </Button>
       </div>
-      {rooms === undefined && <p className="rooms__note">Buscando salas…</p>}
-      {rooms === null && <p className="rooms__error">No se pudo contactar al servidor.</p>}
-      {rooms?.length === 0 && <p className="rooms__note">No hay salas públicas esperando jugadores. ¡Crea una!</p>}
+      {rooms === undefined && <p className="cafe-note">Buscando mesas…</p>}
+      {rooms === null && <p className="cafe-error">No se pudo contactar al servidor. Revisa tu conexión y toca Actualizar.</p>}
+      {rooms?.length === 0 && <p className="cafe-note">Ahora no hay mesas públicas esperando gente. Abre una y aparecerá acá.</p>}
       {rooms?.length > 0 && (
-        <ul className="public-rooms__list">
+        <ul className="cafe-open__list">
           {rooms.map((r) => {
             const g = getGameBySlug(r.gameId);
             return (
-              <li key={r.code} style={{ '--accent': g?.accent }}>
-                <span className="public-rooms__game">{g?.name ?? r.gameId}</span>
-                <span className="public-rooms__host">Sala de {r.host}</span>
-                <span className="public-rooms__count">
-                  {r.players}/{r.max} jugadores
+              <li key={r.code} className="paper" style={{ '--accent': g?.accent ?? 'var(--cafe-brick)' }}>
+                <span className="cafe-open__game">{g?.name ?? r.gameId}</span>
+                <span className="cafe-open__info">
+                  Mesa de {r.host}, {r.players} de {r.max} sentados
                 </span>
                 <Button size="sm" variant="primary" onClick={() => navigate(`/sala/${r.code}`)}>
-                  Unirse
+                  Sentarse
                 </Button>
               </li>
             );

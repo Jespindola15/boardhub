@@ -34,7 +34,7 @@ export default function useRoom(code) {
         setConnected(s === 'open');
         if (s === 'missing') {
           clearSession(code);
-          setError('No existe una sala con ese código (o ya terminó).');
+          setError('No hay ninguna mesa con ese código. Puede que se haya cerrado por inactividad.');
           setStatus('error');
         }
         if (s !== 'open') return;

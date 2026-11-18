@@ -12,7 +12,7 @@ import './platform.css';
 export default function GameBar({ title, accent = 'var(--brand-3)', inGame, onQuit, actions, badge = 'Partida local · misma PC', onlineSlug }) {
   const [confirm, setConfirm] = useState(false);
   return (
-    <header className="game-bar">
+    <header className="game-bar wood">
       <a href="#/" className="game-bar__home" aria-label="Volver a BoardHub">
         <Logo size={24} />
       </a>
@@ -20,7 +20,7 @@ export default function GameBar({ title, accent = 'var(--brand-3)', inGame, onQu
       <h1 className="game-bar__title" style={{ color: accent }}>
         {title}
       </h1>
-      {badge && <Badge tone="ok">{badge}</Badge>}
+      {badge && <Badge tone="neutral">{badge}</Badge>}
       <div className="game-bar__actions">
         {actions}
         {onlineSlug && (

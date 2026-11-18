@@ -4,9 +4,14 @@
  *
  * RoomData (JSON, se guarda tal cual) = {
  *   code, gameId, options, status: 'lobby' | 'playing' | 'finished',
- *   hostId, seats: [{ playerId, name, colorId, token }],
- *   state, processed: [[clientActionId, result]], updatedAt
+ *   hostId, seats: [{ playerId, name, colorId, token, gone? }],
+ *   state, processed: [[clientActionId, result]], updatedAt,
+ *   match: número de partida en esta sala (empieza en 1),
+ *   votes: { playerId: gameId } para la próxima partida,
+ *   results: [{ match, gameId, winners: [playerId], names: [nombre] }] partidas ya jugadas
  * }
+ * Al terminar una partida, cualquiera vuelve a la sala (`returnToLobby`): mismas personas y mismo código.
+ * Todos votan el próximo juego y el anfitrión lo confirma (`setGame`).
  */
 import { GAMES } from '../games.js';
 
@@ -65,6 +70,9 @@ export class Room {
         state: null,
         processed: [],
         updatedAt: 0,
+        match: 1,
+        votes: {},
+        results: [],
       },
       env,
     );
@@ -130,6 +138,7 @@ export class Room {
     if (d.hostId !== playerId) fail('Sólo el anfitrión puede empezar.');
     if (d.status !== 'lobby') fail('La partida ya empezó.');
     if (d.seats.length < this.game.players.min) fail(`Hacen falta al menos ${this.game.players.min} jugadores.`);
+    if (d.seats.length > this.game.players.max) fail(`${this.game.name ?? 'Este juego'} admite como máximo ${this.game.players.max} jugadores.`);
     const countError = this.game.checkPlayers?.(d.seats.length, d.options);
     if (countError) fail(countError);
     d.state = this.game.setup({
@@ -176,13 +185,70 @@ export class Room {
     const d = this.data;
     if (d.status === 'lobby') {
       d.seats = d.seats.filter((s) => s.playerId !== playerId);
+      if (d.votes) delete d.votes[playerId];
       if (d.hostId === playerId) d.hostId = d.seats[0]?.playerId ?? null;
-    } else if (d.status === 'playing') {
+    } else {
+      // En partida o con la partida terminada: el asiento queda hasta volver a la sala, y ahí se libera.
+      const seat = d.seats.find((s) => s.playerId === playerId);
+      if (seat) seat.gone = true;
+      if (d.hostId === playerId) d.hostId = d.seats.find((s) => !s.gone)?.playerId ?? null;
+    }
+    if (d.status === 'playing') {
       const r = this.game.removePlayer(d.state, playerId, this.rng);
       if (r.ok) d.state = r.state;
       if (this.game.getResult(d.state)) d.status = 'finished';
-      if (d.hostId === playerId) d.hostId = d.seats.find((s) => s.playerId !== playerId)?.playerId ?? null;
     }
+    this.touch();
+  }
+
+  /**
+   * Partida terminada → sala de espera con las mismas personas y el mismo código.
+   * Lo puede pedir cualquiera que siga en la sala. Se guarda el resultado y se limpian los votos.
+   */
+  returnToLobby(playerId) {
+    const d = this.data;
+    const me = d.seats.find((s) => s.playerId === playerId && !s.gone);
+    if (!me) fail('No estás en esta sala.');
+    if (d.status === 'lobby') return; // ya volvió otro jugador
+    if (d.status !== 'finished') fail('La partida todavía no terminó.');
+    const winners = this.game.getResult(d.state)?.winners ?? [];
+    d.results ??= [];
+    d.results.push({ match: d.match ?? 1, gameId: d.gameId, winners, names: winners.map((id) => d.seats.find((s) => s.playerId === id)?.name ?? '—') });
+    if (d.results.length > 20) d.results.shift();
+    d.seats = d.seats.filter((s) => !s.gone);
+    if (!d.seats.some((s) => s.playerId === d.hostId)) d.hostId = d.seats[0]?.playerId ?? null;
+    d.status = 'lobby';
+    d.state = null;
+    d.processed = [];
+    d.votes = {};
+    d.match = (d.match ?? 1) + 1;
+    this.touch();
+  }
+
+  /** Voto de un jugador por el próximo juego (null lo retira). */
+  vote(playerId, gameId) {
+    const d = this.data;
+    if (!d.seats.some((s) => s.playerId === playerId && !s.gone)) fail('No estás en esta sala.');
+    if (d.status !== 'lobby') fail('Se vota en la sala de espera.');
+    d.votes ??= {};
+    if (gameId == null) delete d.votes[playerId];
+    else {
+      if (!GAMES[gameId]) fail('Ese juego no se puede jugar en línea.');
+      d.votes[playerId] = gameId;
+    }
+    this.touch();
+  }
+
+  /** El anfitrión confirma el juego de la próxima partida (opciones por defecto de ese juego). */
+  setGame(playerId, gameId) {
+    const d = this.data;
+    if (d.hostId !== playerId) fail('Sólo el anfitrión elige el juego.');
+    if (d.status !== 'lobby') fail('La partida ya empezó.');
+    const game = GAMES[gameId];
+    if (!game) fail('Ese juego no se puede jugar en línea.');
+    if (gameId === d.gameId) return;
+    d.gameId = gameId;
+    d.options = game.validateOptions ? game.validateOptions({}) : {};
     this.touch();
   }
 
@@ -192,8 +258,10 @@ export class Room {
     if (playerId === hostId) fail('No puedes quitarte a ti mismo; usa "Salir".');
     const target = d.seats.find((s) => s.playerId === playerId);
     if (!target) fail('Ese jugador no está en la sala.');
-    if (d.status === 'lobby') d.seats = d.seats.filter((s) => s.playerId !== playerId);
-    else this.leave(playerId);
+    if (d.status === 'lobby') {
+      d.seats = d.seats.filter((s) => s.playerId !== playerId);
+      if (d.votes) delete d.votes[playerId];
+    } else this.leave(playerId);
     target.token = null; // su sesión deja de valer
     this.touch();
   }
@@ -214,8 +282,12 @@ export class Room {
       hostId: d.hostId,
       options: d.options,
       limits: this.game.players,
-      countError: this.game.checkPlayers?.(d.seats.length, d.options) ?? null,
-      seats: d.seats.map((s) => ({ playerId: s.playerId, name: s.name, colorId: s.colorId, connected: online.has(s.playerId), left: left.has(s.playerId) })),
+      countError: d.seats.length > this.game.players.max ? `Este juego admite como máximo ${this.game.players.max} jugadores.` : this.game.checkPlayers?.(d.seats.length, d.options) ?? null,
+      seats: d.seats.map((s) => ({ playerId: s.playerId, name: s.name, colorId: s.colorId, connected: online.has(s.playerId), left: left.has(s.playerId) || Boolean(s.gone) })),
+      match: d.match ?? 1,
+      votes: d.votes ?? {},
+      results: d.results ?? [],
+      games: Object.fromEntries(Object.entries(GAMES).map(([id, g]) => [id, { min: g.players.min, max: g.players.max }])),
     };
   }
 

@@ -7,6 +7,7 @@
  *
  * Una conexión WebSocket pertenece a UNA sala (URL /ws/CODIGO).
  * Peticiones: room:join {name} · room:resume {token} · room:options {options} · room:visibility {visibility} · room:start
+ *             room:return (partida terminada → sala de espera) · room:vote {gameId|null} · room:game {gameId} (anfitrión)
  *             room:leave · room:remove {playerId} · game:action {...} · sync · ping
  * La creación de salas es por HTTP: POST /api/rooms {gameId, name, options, visibility}.
  * Salas públicas abiertas: GET /api/rooms[?game=slug].
@@ -52,6 +53,15 @@ export function handleRequest(room, conn, ev, payload = {}, { rateLimit = RATE_L
         return { reply: { ok: true }, changed: true };
       case 'room:start':
         room.start(me());
+        return { reply: { ok: true }, changed: true };
+      case 'room:return':
+        room.returnToLobby(me());
+        return { reply: { ok: true }, changed: true };
+      case 'room:vote':
+        room.vote(me(), payload.gameId ?? null);
+        return { reply: { ok: true }, changed: true };
+      case 'room:game':
+        room.setGame(me(), payload.gameId);
         return { reply: { ok: true }, changed: true };
       case 'room:leave': {
         room.leave(me());

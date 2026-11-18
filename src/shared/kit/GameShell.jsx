@@ -86,23 +86,23 @@ function StartMenu({ slug, logo, accent, intro, Options, defaultOptions, onLocal
   };
 
   return (
-    <div className="kit-setup">
+    <div className="kit-setup cafe-stage">
       <div className="kit-card">
         <span className="kit-logo" style={{ '--accent': accent }}>
           {logo}
         </span>
         {intro && <p>{intro}</p>}
         <section className="kit-block">
-          <h3>Crear sala online</h3>
+          <h3>Abrir una mesa en línea</h3>
           <input className="kit-input" placeholder="Tu nombre" maxLength={16} value={name} onChange={(e) => setName(e.target.value)} />
           <VisibilityToggle value={visibility} onChange={setVisibility} />
           {Options && <Options options={options} onChange={setOptions} />}
           <Button variant="primary" size="lg" disabled={!name.trim() || busy} onClick={create}>
-            Crear sala {visibility === 'public' ? 'pública' : 'privada'}
+            Abrir mesa {visibility === 'public' ? 'pública' : 'privada'}
           </Button>
         </section>
         <section className="kit-block">
-          <h3>Unirse</h3>
+          <h3>Sentarse con un código</h3>
           <div className="kit-row">
             <input
               className="kit-input kit-input--code"
@@ -117,11 +117,11 @@ function StartMenu({ slug, logo, accent, intro, Options, defaultOptions, onLocal
             </Button>
           </div>
           <Button variant="ghost" onClick={() => navigate(`/salas?juego=${slug}`)}>
-            Ver salas públicas abiertas →
+            Ver mesas abiertas
           </Button>
         </section>
         <Button variant="ghost" onClick={onLocal}>
-          Jugar en esta PC (sin conexión) →
+          Jugar en esta compu, pasándola
         </Button>
         {error && <p className="kit-error">{error}</p>}
       </div>
@@ -137,7 +137,7 @@ function LocalSetup({ logo, accent, min, max, Options, defaultOptions, checkPlay
   const countError = checkPlayers?.(names.length, options) ?? null;
 
   return (
-    <div className="kit-setup">
+    <div className="kit-setup cafe-stage">
       <div className="kit-card">
         <span className="kit-logo" style={{ '--accent': accent }}>
           {logo}
@@ -163,7 +163,7 @@ function LocalSetup({ logo, accent, min, max, Options, defaultOptions, checkPlay
         {Options && <Options options={options} onChange={setOptions} />}
         <div className="kit-row">
           <Button variant="ghost" onClick={onBack}>
-            ← Volver
+            Volver
           </Button>
           <Button
             variant="primary"

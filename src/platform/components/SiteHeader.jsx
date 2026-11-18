@@ -3,29 +3,28 @@ import Button from '../../shared/Button.jsx';
 import { navigate } from '../../app/router.js';
 import './platform.css';
 
+/** Riel de madera con la marca y la navegación. */
 export default function SiteHeader({ active = 'inicio' }) {
   return (
-    <header className="site-header">
-      <div className="site-header__inner">
+    <header className="cafe-header wood">
+      <div className="cafe-header__inner">
         <a href="#/" aria-label="BoardHub, inicio">
           <Logo />
         </a>
-        <nav className="site-nav" aria-label="Principal">
-          <a href="#/" className={`site-nav__link ${active === 'inicio' ? 'is-active' : ''}`}>
+        <nav className="cafe-nav" aria-label="Principal">
+          <a href="#/" aria-current={active === 'inicio' ? 'page' : undefined}>
             Inicio
           </a>
-          <a href="#/" className="site-nav__link" onClick={goToCatalog}>
+          <a href="#/" onClick={goToCatalog}>
             Juegos
           </a>
-          <a href="#/salas" className={`site-nav__link ${active === 'salas' ? 'is-active' : ''}`}>
+          <a href="#/salas" aria-current={active === 'salas' ? 'page' : undefined}>
             Salas
           </a>
         </nav>
-        <div className="site-header__actions">
-          <Button variant="primary" size="sm" onClick={() => navigate('/salas')}>
-            Crear o unirse a una sala
-          </Button>
-        </div>
+        <Button variant="primary" size="sm" onClick={() => navigate('/salas')}>
+          Abrir una mesa
+        </Button>
       </div>
     </header>
   );

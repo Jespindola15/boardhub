@@ -12,7 +12,7 @@ export default function LocalSetup({ onStart, onBack }) {
   const valid = clean.every(Boolean) && new Set(clean.map((n) => n.toLowerCase())).size === clean.length;
 
   return (
-    <div className="cm-setup">
+    <div className="cm-setup cafe-stage">
       <div className="cm-setup__card">
         <span className="cm-logo">ÚLTIMA CARTA</span>
         <h2>Partida en esta PC</h2>
