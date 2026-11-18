@@ -39,11 +39,32 @@ export class RoomDO extends DurableObject {
       await this.ctx.storage.deleteAll();
       this.room = null;
       await this.publish(code, null);
+      await this.report(code, null);
       return;
     }
     await this.ctx.storage.put('room', this.room.data);
     await this.ctx.storage.setAlarm(Date.now() + ROOM_TTL_MS);
     await this.publish(code, this.room.listing());
+    await this.report(code, this.room.data.status);
+  }
+
+  lobby() {
+    return this.env.LOBBY.get(this.env.LOBBY.idFromName('main'));
+  }
+
+  /** Avisa al registro del tope de mesas (sólo si cambió la etapa o las conexiones). */
+  async report(code, status) {
+    if (!this.env.LOBBY) return;
+    const connected = status ? this.ctx.getWebSockets().filter((ws) => ws.readyState === 1).length : 0;
+    const key = status ? `${status}:${connected}` : null;
+    if (key === this.lastReport) return;
+    this.lastReport = key;
+    try {
+      await (status ? this.lobby().track(code, status, connected) : this.lobby().untrack(code));
+    } catch (e) {
+      this.lastReport = undefined;
+      console.error('registro', e);
+    }
   }
 
   /** Mantiene al día el listado de salas públicas (sólo si cambió). */
@@ -83,7 +104,7 @@ export class RoomDO extends DurableObject {
     if (!room) {
       safeSend(server, { ev: 'room:missing', data: {} });
       server.close(4004, 'sala inexistente');
-    }
+    } else await this.report(room.data.code, room.data.status);
     return new Response(null, { status: 101, webSocket: client });
   }
 
@@ -141,7 +162,11 @@ export class RoomDO extends DurableObject {
     } catch {
       /* ya cerrado */
     }
-    if (await this.load()) this.broadcast(); // actualizar "conectado/desconectado"
+    const room = await this.load();
+    if (room) {
+      this.broadcast(); // actualizar "conectado/desconectado"
+      await this.report(room.data.code, room.data.status);
+    }
   }
 
   async webSocketError(ws) {
@@ -157,6 +182,7 @@ export class RoomDO extends DurableObject {
       await this.ctx.storage.deleteAll();
       this.room = null;
       await this.publish(code, null);
+      await this.report(code, null);
     } else {
       await this.ctx.storage.setAlarm(Date.now() + ROOM_TTL_MS);
     }

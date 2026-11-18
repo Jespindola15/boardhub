@@ -13,6 +13,7 @@ import { WebSocketServer } from 'ws';
 import { Room, RoomError, newCode, isValidCode } from './core/room.js';
 import { handleRequest, messagesFor } from './core/protocol.js';
 import { createFileStore } from './store.js';
+import { occupiesSlot, maxRoomsFrom, fullMessage } from './core/limits.js';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const DIST = join(ROOT, 'dist');
@@ -51,7 +52,7 @@ function readJson(req) {
   });
 }
 
-export function startServer({ port = 3001, dataFile = join(ROOT, 'server', 'data', 'rooms.json'), rng, rateLimit } = {}) {
+export function startServer({ port = 3001, dataFile = join(ROOT, 'server', 'data', 'rooms.json'), rng, rateLimit, maxRooms = maxRoomsFrom(process.env.MAX_ROOMS) } = {}) {
   const store = createFileStore(dataFile);
   /** code → Room */
   const rooms = new Map(store.load().map((d) => [d.code, new Room(d, { rng })]));
@@ -59,6 +60,8 @@ export function startServer({ port = 3001, dataFile = join(ROOT, 'server', 'data
   const conns = new Map();
 
   const persist = () => store.save([...rooms.values()].map((r) => r.data));
+  /** Mesas que ocupan lugar ahora (ver server/core/limits.js). */
+  const activeRooms = () => [...rooms.values()].filter((r) => occupiesSlot({ status: r.data.status, connected: conns.get(r.data.code)?.size ?? 0, seenAt: r.data.updatedAt })).length;
   const online = (code) => new Set([...(conns.get(code) ?? [])].map((c) => c.playerId).filter(Boolean));
   const send = (conn, msg) => conn.ws.readyState === 1 && conn.ws.send(JSON.stringify(msg));
 
@@ -78,13 +81,18 @@ export function startServer({ port = 3001, dataFile = join(ROOT, 'server', 'data
         .sort((a, b) => b.updatedAt - a.updatedAt)
         .slice(0, 100);
       res.setHeader('Content-Type', 'application/json');
-      res.end(JSON.stringify({ ok: true, rooms: list }));
+      res.end(JSON.stringify({ ok: true, rooms: list, capacity: { active: activeRooms(), max: maxRooms } }));
       return;
     }
     if (req.method === 'POST' && req.url === '/api/rooms') {
       const body = await readJson(req);
       res.setHeader('Content-Type', 'application/json');
       try {
+        if (activeRooms() >= maxRooms) {
+          res.statusCode = 429;
+          res.end(JSON.stringify({ ok: false, full: true, error: fullMessage(maxRooms), capacity: { active: activeRooms(), max: maxRooms } }));
+          return;
+        }
         let code;
         do code = newCode();
         while (rooms.has(code));

@@ -4,7 +4,7 @@ import SiteFooter from '../components/SiteFooter.jsx';
 import Button from '../../shared/Button.jsx';
 import { GAMES, getGameBySlug } from '../catalog/gamesCatalog.js';
 import { createRoom } from '../../net/useRoom.js';
-import { listPublicRooms } from '../../net/socket.js';
+import { fetchRoomsInfo } from '../../net/socket.js';
 import { lastName } from '../../net/session.js';
 import { navigate, hashQuery } from '../../app/router.js';
 import '../components/platform.css';
@@ -21,12 +21,17 @@ export default function RoomsPage() {
   const [code, setCode] = useState('');
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [capacity, setCapacity] = useState(null);
+  const full = capacity && capacity.active >= capacity.max;
 
   const create = async () => {
     setBusy(true);
     const r = await createRoom({ gameId, name, options: {}, visibility });
     setBusy(false);
-    if (!r.ok) return setError(r.error);
+    if (!r.ok) {
+      if (r.capacity) setCapacity(r.capacity);
+      return setError(r.error);
+    }
     navigate(`/sala/${r.code}`);
   };
 
@@ -57,11 +62,17 @@ export default function RoomsPage() {
               <span id="vis">Quién puede entrar</span>
               <CafeVisibility value={visibility} onChange={setVisibility} labelledBy="vis" />
             </div>
-            <div>
-              <Button variant="primary" size="lg" disabled={!name.trim() || !gameId || busy} onClick={create}>
+            <div className="cafe-open-row">
+              <Button variant="primary" size="lg" disabled={!name.trim() || !gameId || busy || full} onClick={create}>
                 Abrir la mesa
               </Button>
+              {capacity && (
+                <span className={`cafe-capacity ${full ? 'is-full' : ''}`}>
+                  {full ? `Las ${capacity.max} mesas están ocupadas` : `Mesas en uso: ${capacity.active} de ${capacity.max}`}
+                </span>
+              )}
             </div>
+            {full && <p className="cafe-sheet__hint">Cuando termine o se cierre alguna vas a poder abrir otra. Mientras, puedes sentarte en una de las mesas abiertas de abajo.</p>}
             <p className="cafe-sheet__hint">Las opciones del juego se eligen en la mesa, antes de empezar. Al terminar pueden quedarse y elegir otro juego.</p>
             {error && <p className="cafe-error">{error}</p>}
           </section>
@@ -85,7 +96,7 @@ export default function RoomsPage() {
             </div>
           </section>
         </div>
-        <PublicRooms />
+        <PublicRooms onCapacity={setCapacity} />
       </main>
       <SiteFooter />
     </div>
@@ -126,10 +137,14 @@ export function VisibilityToggle({ value, onChange, disabled }) {
   );
 }
 
-function PublicRooms() {
+function PublicRooms({ onCapacity }) {
   const [rooms, setRooms] = useState(undefined);
   const [filter, setFilter] = useState(hashQuery().get('juego') ?? '');
-  const load = useCallback(async () => setRooms(await listPublicRooms(filter || undefined)), [filter]);
+  const load = useCallback(async () => {
+    const info = await fetchRoomsInfo(filter || undefined);
+    setRooms(info ? info.rooms : null);
+    if (info?.capacity) onCapacity?.(info.capacity);
+  }, [filter, onCapacity]);
   useEffect(() => {
     load();
     const t = setInterval(load, 5000);

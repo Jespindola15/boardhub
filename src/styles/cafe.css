@@ -460,3 +460,8 @@
 .cafe-footer__brand { display: flex; flex-direction: column; gap: 2px; font-size: 14px; color: var(--text-2); white-space: nowrap; }
 .cafe-footer__brand strong { font-family: var(--cafe-serif); font-size: 18px; color: var(--cafe-brass-light); }
 .cafe-footer__legal { flex: 1; min-width: 320px; }
+
+/* Tope de mesas */
+.cafe-open-row { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.cafe-capacity { font-size: 15px; color: var(--cafe-ink-2); }
+.cafe-capacity.is-full { color: var(--cafe-brick); font-weight: 700; }

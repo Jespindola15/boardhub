@@ -113,6 +113,17 @@ export async function createRoomRequest({ gameId, name, options, visibility }) {
 }
 
 /** Salas públicas abiertas (en espera y con lugar). */
+/** Mesas abiertas y cuántas mesas hay en uso: { rooms, capacity: { active, max } } o null sin conexión. */
+export async function fetchRoomsInfo(game) {
+  try {
+    const res = await fetch(`${httpBase()}/api/rooms${game ? `?game=${encodeURIComponent(game)}` : ''}`, { cache: 'no-store' });
+    const r = await res.json();
+    return r.ok ? { rooms: r.rooms, capacity: r.capacity ?? null } : { rooms: [], capacity: null };
+  } catch {
+    return null;
+  }
+}
+
 export async function listPublicRooms(game) {
   try {
     const res = await fetch(`${httpBase()}/api/rooms${game ? `?game=${encodeURIComponent(game)}` : ''}`, { cache: 'no-store' });

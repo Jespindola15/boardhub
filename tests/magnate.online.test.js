@@ -26,7 +26,7 @@ before(async () => {
     api = makeClient(external);
     return;
   }
-  server = await startServer({ port: 0, dataFile: join(mkdtempSync(join(tmpdir(), 'bh-')), 'rooms.json'), rateLimit: 100000 });
+  server = await startServer({ port: 0, dataFile: join(mkdtempSync(join(tmpdir(), 'bh-')), 'rooms.json'), rateLimit: 100000, maxRooms: 1000 });
   api = makeClient(`http://localhost:${server.port}`);
 });
 after(async () => {

@@ -20,5 +20,7 @@
     { "tag": "v1", "new_sqlite_classes": ["RoomDO"] },
     { "tag": "v2", "new_sqlite_classes": ["LobbyDO"] }
   ],
+  // Tope de mesas abiertas a la vez (ver server/core/limits.js). Cambiar acá y volver a publicar.
+  "vars": { "MAX_ROOMS": "10" },
   "observability": { "enabled": true }
 }
