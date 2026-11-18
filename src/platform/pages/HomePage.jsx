@@ -1,7 +1,8 @@
 import SiteHeader from '../components/SiteHeader.jsx';
 import GameArt from '../components/GameArt.jsx';
 import Button from '../../shared/Button.jsx';
-import { GAMES, TRADEMARK_NOTICE } from '../catalog/gamesCatalog.js';
+import { GAMES } from '../catalog/gamesCatalog.js';
+import SiteFooter from '../components/SiteFooter.jsx';
 import { navigate } from '../../app/router.js';
 import '../components/platform.css';
 
@@ -117,10 +118,7 @@ export default function HomePage() {
         </section>
       </main>
 
-      <footer className="cafe-footer">
-        <p className="cafe-footer__legal">{TRADEMARK_NOTICE}</p>
-        <span>BoardHub, {games.length} juegos con mesas en línea</span>
-      </footer>
+      <SiteFooter />
     </div>
   );
 }

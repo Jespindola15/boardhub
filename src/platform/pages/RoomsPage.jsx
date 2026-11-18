@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import SiteHeader from '../components/SiteHeader.jsx';
+import SiteFooter from '../components/SiteFooter.jsx';
 import Button from '../../shared/Button.jsx';
 import { GAMES, getGameBySlug } from '../catalog/gamesCatalog.js';
 import { createRoom } from '../../net/useRoom.js';
@@ -86,6 +87,7 @@ export default function RoomsPage() {
         </div>
         <PublicRooms />
       </main>
+      <SiteFooter />
     </div>
   );
 }
